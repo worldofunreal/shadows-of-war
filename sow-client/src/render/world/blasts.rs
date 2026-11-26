@@ -1,6 +1,6 @@
 use sow_core::bitset::DenseBitSet;
-use sow_core::game::BuildingKind;
-use sow_core::protocol::BuildingSnapshot;
+use sow_core::game::{BuildingKind, UnitType};
+use sow_core::protocol::{BuildingSnapshot, FleetSnapshot, PlayerSnapshot};
 use sow_render::{
     BLAST_KIND_BUILDING_POP, BLAST_KIND_ENTITY_DEATH, BLAST_KIND_GROUND_SCORCH, BLAST_KIND_NUKE_AIR,
     BLAST_KIND_SAM_AIRBURST, BlastInstanceGpu, BlastRenderer, MAX_BLAST_INSTANCES,
@@ -14,9 +14,11 @@ const SAM_AIRBURST_LIFETIME_SECS: f32 = 0.48;
 const SAM_AIRBURST_RADIUS: f32 = 6.5;
 const BUILDING_POP_LIFETIME_SECS: f32 = 0.72;
 pub const BUILDING_COLLAPSE_SECS: f32 = 0.62;
+pub const SHIP_COLLAPSE_SECS: f32 = 0.68;
 const ENTITY_DEATH_LIFETIME_SECS: f32 = 0.88;
 const CAMERA_SHAKE_DURATION_SECS: f32 = 0.30;
 const MAX_DYING_BUILDINGS: usize = 256;
+const MAX_DYING_SHIPS: usize = 128;
 
 #[inline]
 pub fn pack_rgb_f32(rgb: [f32; 3]) -> f32 {
@@ -34,7 +36,87 @@ fn building_demolition_tier_and_radius(kind: BuildingKind, level: u8) -> (f32, f
         BuildingKind::Port | BuildingKind::SAM | BuildingKind::TradingPost => {
             (1.0, (5.6 + lvl * 0.65).min(8.5))
         }
-        BuildingKind::Tower | BuildingKind::MilitaryCamp => (0.0, (4.6 + lvl * 0.50).min(6.8)),
+        BuildingKind::Tower | BuildingKind::MilitaryCamp | BuildingKind::Farm => {
+            (0.0, (4.6 + lvl * 0.50).min(6.8))
+        }
+    }
+}
+
+#[inline]
+fn ship_demolition_tier_and_radius(unit_type: UnitType) -> (f32, f32) {
+    match unit_type {
+        UnitType::Warship => (1.0, 6.2),
+        UnitType::TradeShip => (0.0, 4.6),
+        UnitType::TransportShip => (0.0, 4.0),
+    }
+}
+
+#[inline]
+fn match_nuke_wave_hit(
+    recent_detonations: &[RecentNukeDetonation],
+    tile_x: u32,
+    tile_y: u32,
+    world_x: f32,
+    world_y: f32,
+    use_outer_radius: bool,
+) -> Option<(Instant, Instant, u16, [f32; 2])> {
+    let mut best_hit: Option<(Instant, Instant, u16, [f32; 2])> = None;
+    for det in recent_detonations {
+        let dx = tile_x as i64 - det.tile_x as i64;
+        let dy = tile_y as i64 - det.tile_y as i64;
+        let dist_sq = dx * dx + dy * dy;
+        let radius = if use_outer_radius {
+            det.outer_radius
+        } else {
+            det.inner_radius
+        };
+        let reach = i64::from(radius) + 2;
+        if dist_sq > reach * reach {
+            continue;
+        }
+        let dist = (dist_sq as f32).sqrt();
+        let trigger_at = if use_outer_radius && dist > det.inner_radius as f32 {
+            let wave_dur = (det.expand_dur.max(0.28) + 0.45).max(0.72);
+            let frac = (dist / det.outer_radius.max(1) as f32).clamp(0.0, 1.0);
+            let t_hit = 1.0 - (1.0 - frac).powf(1.0 / 2.6);
+            det.start_time + Duration::from_secs_f32((t_hit * wave_dur).max(det.expand_dur))
+        } else {
+            building_wave_hit_time(det.start_time, det.expand_dur, dist, det.inner_radius as f32)
+        };
+        let vx = world_x - (det.tile_x as f32 + 0.5);
+        let vy = world_y - (det.tile_y as f32 + 0.5);
+        let vlen = vx.hypot(vy);
+        let dir = if vlen > 0.05 {
+            [vx / vlen, vy / vlen]
+        } else {
+            [0.0, -1.0]
+        };
+        if best_hit.is_none_or(|(prev, _, _, _)| trigger_at < prev) {
+            best_hit = Some((trigger_at, det.start_time, det.owner_id, dir));
+        }
+    }
+    best_hit
+}
+
+#[inline]
+fn collapse_phase(
+    spawn_time: Instant,
+    trigger_at: Instant,
+    collapse_secs: f32,
+    now: Instant,
+) -> Option<DyingBuildingPhase> {
+    if now < trigger_at {
+        let total_wait = trigger_at
+            .saturating_duration_since(spawn_time)
+            .as_secs_f32()
+            .max(0.001);
+        let elapsed = now.saturating_duration_since(spawn_time).as_secs_f32();
+        Some(DyingBuildingPhase::PreWave((elapsed / total_wait).clamp(0.0, 1.0)))
+    } else {
+        let collapse_age = now.saturating_duration_since(trigger_at).as_secs_f32();
+        (collapse_age < collapse_secs).then(|| {
+            DyingBuildingPhase::Collapsing((collapse_age / collapse_secs).clamp(0.0, 1.0))
+        })
     }
 }
 
@@ -128,15 +210,47 @@ impl ActiveBlast {
 }
 
 /// Snapshot metadata for a nuke detonation that occurred during the current tick,
-/// consumed in `apply_snapshot_fx` to match destroyed buildings for wave-synced pops.
+/// consumed in `apply_snapshot_fx` to match destroyed buildings and fleets for wave-synced pops.
 #[derive(Clone, Copy, Debug)]
 pub struct RecentNukeDetonation {
     pub tile_x: u32,
     pub tile_y: u32,
     pub inner_radius: u32,
+    pub outer_radius: u32,
     pub owner_id: u16,
     pub start_time: Instant,
     pub expand_dur: f32,
+}
+
+/// A naval fleet destroyed by a nuclear detonation, kept visible until the shockwave front
+/// reaches its position, then animated through thermal flash, capsize/sinking, and shatter.
+/// Stored with pre-resolved color and coordinates so low-end devices avoid per-frame lookups.
+#[derive(Clone, Copy, Debug)]
+pub struct DyingShip {
+    pub world_x: f32,
+    pub world_y: f32,
+    pub tile_idx: u32,
+    pub owner_id: u16,
+    pub unit_type: UnitType,
+    pub rgb: [f32; 3],
+    pub blast_dir: [f32; 2],
+    pub spawn_time: Instant,
+    pub trigger_at: Instant,
+    pub popped: bool,
+    pub seed: f32,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct DyingShipRender {
+    pub world_x: f32,
+    pub world_y: f32,
+    pub tile_idx: u32,
+    pub owner_id: u16,
+    pub unit_type: UnitType,
+    pub rgb: [f32; 3],
+    pub blast_dir: [f32; 2],
+    pub seed: f32,
+    pub phase: DyingBuildingPhase,
 }
 
 /// A building destroyed by a nuke or combat demolition, kept visible until the outward-expanding
@@ -198,6 +312,8 @@ pub struct BlastScene {
     ground_blasts: Vec<ActiveBlast>,
     air_blasts: Vec<ActiveBlast>,
     dying_buildings: Vec<DyingBuilding>,
+    dying_ships: Vec<DyingShip>,
+    pending_nuked_fleets: Vec<u64>,
     recent_detonations: Vec<RecentNukeDetonation>,
     shake: CameraShakeState,
     next_seed: u32,
@@ -212,6 +328,8 @@ impl BlastScene {
         self.ground_blasts.clear();
         self.air_blasts.clear();
         self.dying_buildings.clear();
+        self.dying_ships.clear();
+        self.pending_nuked_fleets.clear();
         self.recent_detonations.clear();
         self.shake = CameraShakeState::default();
     }
@@ -221,6 +339,22 @@ impl BlastScene {
         !self.ground_blasts.is_empty()
             || !self.air_blasts.is_empty()
             || !self.dying_buildings.is_empty()
+            || !self.dying_ships.is_empty()
+    }
+
+    #[inline]
+    pub fn push_pending_nuked_fleet(&mut self, fleet_id: u64) {
+        self.pending_nuked_fleets.push(fleet_id);
+    }
+
+    #[inline]
+    pub fn has_pending_nuked_fleets(&self) -> bool {
+        !self.pending_nuked_fleets.is_empty()
+    }
+
+    #[inline]
+    pub fn clear_pending_nuked_fleets(&mut self) {
+        self.pending_nuked_fleets.clear();
     }
 
     #[inline]
@@ -301,6 +435,7 @@ impl BlastScene {
                 tile_x,
                 tile_y,
                 inner_radius,
+                outer_radius,
                 owner_id,
                 start_time: now,
                 expand_dur,
@@ -448,6 +583,71 @@ impl BlastScene {
         );
     }
 
+    /// Match fleets sunk by nuclear detonations against this tick's detonations so they remain
+    /// intact until the outward shockwave front crosses them, then animate destruction/sinking.
+    /// Must run before `register_dying_buildings` (which clears `recent_detonations`).
+    pub fn register_dying_ships(
+        &mut self,
+        prev_fleets: &[FleetSnapshot],
+        players: &[PlayerSnapshot],
+        map_w: u32,
+    ) {
+        if self.pending_nuked_fleets.is_empty() {
+            return;
+        }
+        let fleet_ids = std::mem::take(&mut self.pending_nuked_fleets);
+        if map_w == 0 || self.recent_detonations.is_empty() {
+            return;
+        }
+        for fleet_id in fleet_ids {
+            let Some(fleet) = prev_fleets.iter().find(|f| f.id == fleet_id) else {
+                continue;
+            };
+            let tile_x = fleet.current_tile % map_w;
+            let tile_y = fleet.current_tile / map_w;
+            let (world_x, world_y) = super::movers::fleet_world_pos(fleet, map_w);
+            let Some((trigger_at, spawn_time, _, blast_dir)) = match_nuke_wave_hit(
+                &self.recent_detonations,
+                tile_x,
+                tile_y,
+                world_x,
+                world_y,
+                true,
+            ) else {
+                continue;
+            };
+            let rgb = players
+                .iter()
+                .find(|p| p.id == fleet.owner_id)
+                .map(|p| {
+                    sow_core::player::player_territory_rgb(
+                        p.player_type,
+                        p.team,
+                        p.color,
+                        p.is_campaign_faction,
+                    )
+                })
+                .unwrap_or([0.5, 0.5, 0.5]);
+            let seed = self.alloc_seed();
+            if self.dying_ships.len() >= MAX_DYING_SHIPS {
+                self.dying_ships.swap_remove(0);
+            }
+            self.dying_ships.push(DyingShip {
+                world_x,
+                world_y,
+                tile_idx: fleet.current_tile,
+                owner_id: fleet.owner_id,
+                unit_type: fleet.unit_type,
+                rgb,
+                blast_dir,
+                spawn_time,
+                trigger_at,
+                popped: false,
+                seed,
+            });
+        }
+    }
+
     /// Match vanished buildings against this tick's nuke detonations (or direct combat demolition)
     /// so they remain intact until the shockwave crosses their footprint, then animate through
     /// impact flash, squash-stretch, shard shatter, and structural collapse.
@@ -473,34 +673,8 @@ impl BlastScene {
             let bx = b.tile_idx % map_w;
             let by = b.tile_idx / map_w;
             let (world_x, world_y) = building_footprint_world_center(b.kind, bx, by);
-            let mut best_hit: Option<(Instant, Instant, u16, [f32; 2])> = None;
-            for det in &self.recent_detonations {
-                let dx = bx as i64 - det.tile_x as i64;
-                let dy = by as i64 - det.tile_y as i64;
-                let dist_sq = dx * dx + dy * dy;
-                let reach = i64::from(det.inner_radius) + 2;
-                if dist_sq > reach * reach {
-                    continue;
-                }
-                let dist = (dist_sq as f32).sqrt();
-                let trigger_at = building_wave_hit_time(
-                    det.start_time,
-                    det.expand_dur,
-                    dist,
-                    det.inner_radius as f32,
-                );
-                let vx = world_x - (det.tile_x as f32 + 0.5);
-                let vy = world_y - (det.tile_y as f32 + 0.5);
-                let vlen = vx.hypot(vy);
-                let dir = if vlen > 0.05 {
-                    [vx / vlen, vy / vlen]
-                } else {
-                    [0.0, -1.0]
-                };
-                if best_hit.is_none_or(|(prev, _, _, _)| trigger_at < prev) {
-                    best_hit = Some((trigger_at, det.start_time, det.owner_id, dir));
-                }
-            }
+            let best_hit =
+                match_nuke_wave_hit(&self.recent_detonations, bx, by, world_x, world_y, false);
             let resolved = best_hit.or_else(|| {
                 allow_non_nuke.then(|| {
                     let ang = ((b.id as u32).wrapping_mul(2654435761) as f32)
@@ -529,47 +703,44 @@ impl BlastScene {
         self.recent_detonations.clear();
     }
 
+    /// Active dying ships for `MoverScene::pack_dying_ships` through pre-wave tremor and sinking.
+    pub fn dying_ships_for_render(
+        &self,
+        now: Instant,
+    ) -> impl Iterator<Item = DyingShipRender> + '_ {
+        self.dying_ships.iter().filter_map(move |ds| {
+            collapse_phase(ds.spawn_time, ds.trigger_at, SHIP_COLLAPSE_SECS, now).map(|phase| {
+                DyingShipRender {
+                    world_x: ds.world_x,
+                    world_y: ds.world_y,
+                    tile_idx: ds.tile_idx,
+                    owner_id: ds.owner_id,
+                    unit_type: ds.unit_type,
+                    rgb: ds.rgb,
+                    blast_dir: ds.blast_dir,
+                    seed: ds.seed,
+                    phase,
+                }
+            })
+        })
+    }
+
     /// Active dying buildings for `overlays.rs` to draw through pre-wave tremor and post-impact collapse.
     pub fn dying_buildings_for_render(
         &self,
         now: Instant,
     ) -> impl Iterator<Item = DyingBuildingRender<'_>> {
         self.dying_buildings.iter().filter_map(move |db| {
-            if now < db.trigger_at {
-                let total_wait = db
-                    .trigger_at
-                    .saturating_duration_since(db.spawn_time)
-                    .as_secs_f32()
-                    .max(0.001);
-                let elapsed = now
-                    .saturating_duration_since(db.spawn_time)
-                    .as_secs_f32();
-                let pre_t = (elapsed / total_wait).clamp(0.0, 1.0);
-                Some(DyingBuildingRender {
+            collapse_phase(db.spawn_time, db.trigger_at, BUILDING_COLLAPSE_SECS, now).map(
+                |phase| DyingBuildingRender {
                     building: &db.building,
                     world_x: db.world_x,
                     world_y: db.world_y,
                     blast_dir: db.blast_dir,
                     seed: db.seed,
-                    phase: DyingBuildingPhase::PreWave(pre_t),
-                })
-            } else {
-                let collapse_age = now.saturating_duration_since(db.trigger_at).as_secs_f32();
-                if collapse_age < BUILDING_COLLAPSE_SECS {
-                    Some(DyingBuildingRender {
-                        building: &db.building,
-                        world_x: db.world_x,
-                        world_y: db.world_y,
-                        blast_dir: db.blast_dir,
-                        seed: db.seed,
-                        phase: DyingBuildingPhase::Collapsing(
-                            (collapse_age / BUILDING_COLLAPSE_SECS).clamp(0.0, 1.0),
-                        ),
-                    })
-                } else {
-                    None
-                }
-            }
+                    phase,
+                },
+            )
         })
     }
 
@@ -614,6 +785,7 @@ impl BlastScene {
         mut push: impl FnMut(bool, BlastInstanceGpu),
     ) {
         self.advance_dying_buildings(params.now);
+        self.advance_dying_ships(params.now);
 
         self.ground_blasts.retain(|b| {
             params
@@ -822,6 +994,53 @@ impl BlastScene {
                 || now.saturating_duration_since(db.trigger_at).as_secs_f32()
                     < BUILDING_COLLAPSE_SECS
         });
+    }
+
+    fn advance_dying_ships(&mut self, now: Instant) {
+        let mut i = self.dying_ships.len();
+        while i > 0 {
+            i -= 1;
+            let (pop_event, expired) = {
+                let ds = &mut self.dying_ships[i];
+                let pop_event = if !ds.popped && now >= ds.trigger_at {
+                    ds.popped = true;
+                    Some((ds.world_x, ds.world_y, ds.tile_idx, ds.owner_id, ds.unit_type, ds.rgb))
+                } else {
+                    None
+                };
+                let expired = now >= ds.trigger_at
+                    && now.saturating_duration_since(ds.trigger_at).as_secs_f32()
+                        >= SHIP_COLLAPSE_SECS;
+                (pop_event, expired)
+            };
+            if let Some((world_x, world_y, tile_idx, owner_id, unit_type, rgb)) = pop_event {
+                let (tier, outer_radius) = ship_demolition_tier_and_radius(unit_type);
+                let seed = self.alloc_seed();
+                Self::push_capped(
+                    &mut self.air_blasts,
+                    ActiveBlast {
+                        world_x,
+                        world_y,
+                        tile_idx,
+                        owner_id,
+                        inner_radius: outer_radius * 0.48,
+                        outer_radius,
+                        start_time: now,
+                        expand_dur: tier,
+                        lifetime_secs: BUILDING_POP_LIFETIME_SECS,
+                        kind: BlastKind::BuildingPop,
+                        seed,
+                    },
+                );
+                // Emit water splash ring only when air_blasts has plenty of headroom for low-end GPUs.
+                if self.air_blasts.len() < MAX_BLAST_INSTANCES / 2 {
+                    self.spawn_entity_death(world_x, world_y, tile_idx, owner_id, rgb, 3.0, now);
+                }
+            }
+            if expired {
+                self.dying_ships.swap_remove(i);
+            }
+        }
     }
 
     fn build_gpu_instance(
@@ -1323,5 +1542,67 @@ mod tests {
             .collect();
         assert_eq!(death_instances.len(), 15);
         assert!(death_instances.iter().all(|inst| inst.seed >= 1.5));
+    }
+
+    #[test]
+    fn register_dying_ships_defers_wave_pop_until_shockwave_arrival() {
+        let mut scene = BlastScene::new();
+        let t0 = Instant::now();
+        scene.spawn_nuke_detonation(
+            50,
+            50,
+            12,
+            30,
+            1,
+            200,
+            0.40,
+            t0,
+            false,
+            (0.0, 0.0, 2.0),
+            (800.0, 600.0),
+            1.0,
+        );
+        scene.push_pending_nuked_fleet(42);
+        let fleet = FleetSnapshot {
+            id: 42,
+            owner_id: 2,
+            unit_type: UnitType::Warship,
+            troops: 0.0,
+            current_tile: 50 * 200 + 62, // right at inner_radius = 12
+            path: std::sync::Arc::new(Vec::new()),
+            path_cursor: 0,
+            movement_progress: 0.0,
+            eta_seconds: None,
+            retreating: false,
+            max_health: 1000.0,
+            warship: None,
+            captured_trade_return: false,
+        };
+        scene.register_dying_ships(&[fleet], &[], 200);
+        assert!(!scene.has_pending_nuked_fleets());
+
+        // Right after detonation, distant ship is still in PreWave (tremor before shockwave).
+        let pre: Vec<_> = scene.dying_ships_for_render(t0).collect();
+        assert_eq!(pre.len(), 1);
+        assert!(matches!(pre[0].phase, DyingBuildingPhase::PreWave(_)));
+
+        // Once the shockwave hits (~400ms), ship enters Collapsing and emits BuildingPop + splash.
+        let hit_time = t0 + Duration::from_millis(450);
+        scene.advance_dying_ships(hit_time);
+        assert!(scene
+            .air_blasts
+            .iter()
+            .any(|b| b.kind == BlastKind::BuildingPop && b.tile_idx == 50 * 200 + 62));
+        let collapsing: Vec<_> = scene.dying_ships_for_render(hit_time).collect();
+        assert_eq!(collapsing.len(), 1);
+        assert!(matches!(
+            collapsing[0].phase,
+            DyingBuildingPhase::Collapsing(_)
+        ));
+
+        // After collapse duration elapses, ship is swap-removed in O(1).
+        scene.advance_dying_ships(hit_time + Duration::from_secs_f32(SHIP_COLLAPSE_SECS + 0.05));
+        assert!(scene.dying_ships_for_render(hit_time).next().is_none());
+        assert!(scene.dying_ships.is_empty());
     }
 }

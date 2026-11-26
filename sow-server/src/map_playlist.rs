@@ -25,11 +25,14 @@ pub struct MapPlaylist {
 }
 
 static FFA_PLAYLIST: OnceLock<Mutex<MapPlaylist>> = OnceLock::new();
+static RANKED_FFA_PLAYLIST: OnceLock<Mutex<MapPlaylist>> = OnceLock::new();
 static TEAMS_PLAYLIST: OnceLock<Mutex<MapPlaylist>> = OnceLock::new();
 static COOP_PLAYLIST: OnceLock<Mutex<MapPlaylist>> = OnceLock::new();
 
 fn playlist_for(mode: &str) -> &'static Mutex<MapPlaylist> {
-    if mode == "Teams" {
+    if mode == "RankedFFA" {
+        RANKED_FFA_PLAYLIST.get_or_init(|| Mutex::new(MapPlaylist::new("RankedFFA")))
+    } else if mode == "Teams" {
         TEAMS_PLAYLIST.get_or_init(|| Mutex::new(MapPlaylist::new("Teams")))
     } else if sow_core::game_config::is_coop_game_mode(mode) {
         COOP_PLAYLIST.get_or_init(|| Mutex::new(MapPlaylist::new("Coop")))
@@ -167,5 +170,13 @@ mod tests {
                 last.remove(0);
             }
         }
+    }
+
+    #[test]
+    fn ranked_ffa_uses_its_own_recent_map_window() {
+        assert!(!std::ptr::eq(
+            playlist_for("FFA"),
+            playlist_for("RankedFFA")
+        ));
     }
 }

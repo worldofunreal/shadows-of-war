@@ -554,9 +554,11 @@ pub struct SowEngine {
     #[serde(default)]
     pub(crate) railway_routes_dirty: bool,
     #[serde(skip)]
-    railway_track_tile_index: std::collections::HashMap<u32, Vec<(u64, u64)>>,
+    pub(crate) railway_sync_dirty: bool,
     #[serde(skip)]
-    railway_track_index_ready: bool,
+    pub(crate) nuked_interrupted_posts: Vec<u64>,
+    #[serde(skip)]
+    pub(crate) railway_cache: crate::building::RailwayRuntimeCache,
     #[serde(default)]
     pub(crate) trade_stations: Vec<Building>,
     #[serde(default)]
@@ -702,8 +704,54 @@ pub struct SowEngine {
         std::collections::HashMap<PlayerId, crate::intent::nation::profile::AiStrategyWeights>,
 }
 
+/// O(N) diff between two `id`-sorted station slices: returns `(topology_changed, changed_tps)`.
+fn diff_sorted_stations(prev: &[Building], next: &[Building]) -> (bool, Vec<Building>) {
+    let mut topology_changed = prev.len() != next.len();
+    let mut changed_tps = Vec::new();
+    let (mut i, mut j) = (0usize, 0usize);
+    while i < prev.len() && j < next.len() {
+        let a = prev[i];
+        let b = next[j];
+        if a.id == b.id {
+            if a.kind != b.kind || a.tile_idx != b.tile_idx {
+                topology_changed = true;
+            } else if b.kind == crate::game::BuildingKind::TradingPost
+                && (a.owner_id != b.owner_id || a.level != b.level)
+            {
+                changed_tps.push(b);
+            }
+            i += 1;
+            j += 1;
+        } else if a.id < b.id {
+            topology_changed = true;
+            i += 1;
+        } else {
+            topology_changed = true;
+            if b.kind == crate::game::BuildingKind::TradingPost {
+                changed_tps.push(b);
+            }
+            j += 1;
+        }
+    }
+    if i < prev.len() {
+        topology_changed = true;
+    }
+    while j < next.len() {
+        topology_changed = true;
+        if next[j].kind == crate::game::BuildingKind::TradingPost {
+            changed_tps.push(next[j]);
+        }
+        j += 1;
+    }
+    (topology_changed, changed_tps)
+}
+
 impl SowEngine {
-    pub(crate) fn refresh_building_aggregates(&mut self) {
+    /// Refreshes per-player building counts, caps, and land-trade income weights without touching
+    /// the shared railway graph or running Dijkstra. Defers railway topology/route sync via
+    /// `railway_sync_dirty` for the once-per-tick sync points (`execute_income`, `build_snapshot`,
+    /// or `refresh_building_aggregates`).
+    pub(crate) fn refresh_building_counts_only(&mut self) {
         if !self.building_aggregates_dirty {
             return;
         }
@@ -716,6 +764,57 @@ impl SowEngine {
             .unwrap_or(0);
         self.building_aggregates =
             aggregate_buildings_per_player(self.buildings.iter().copied(), max_pid);
+        for link in self.railway_links.iter() {
+            if link.period_ticks == 0 {
+                continue;
+            }
+            if let Some(aggregate) = self.building_aggregates.get_mut(usize::from(link.owner_id)) {
+                aggregate.land_trade_income_weight += link.weight(self.state.map.width);
+                aggregate.railway_connections += 1;
+            }
+        }
+        self.railway_sync_dirty = true;
+        self.building_aggregates_dirty = false;
+    }
+
+    pub(crate) fn refresh_building_aggregates(&mut self) {
+        let needs_railway_sync = !self.railway_network_initialized
+            || self.building_aggregates_dirty
+            || self.railway_sync_dirty
+            || self.railway_routes_dirty
+            || !self.nuked_interrupted_posts.is_empty();
+        if !needs_railway_sync {
+            return;
+        }
+        let links_changed = self.sync_railway_network();
+        if self.building_aggregates_dirty || links_changed || self.building_aggregates.is_empty() {
+            let max_pid = self
+                .state
+                .players
+                .iter()
+                .map(|player| player.id as usize)
+                .max()
+                .unwrap_or(0);
+            self.building_aggregates =
+                aggregate_buildings_per_player(self.buildings.iter().copied(), max_pid);
+            for link in self.railway_links.iter() {
+                if link.period_ticks == 0 {
+                    continue;
+                }
+                if let Some(aggregate) = self.building_aggregates.get_mut(usize::from(link.owner_id))
+                {
+                    aggregate.land_trade_income_weight += link.weight(self.state.map.width);
+                    aggregate.railway_connections += 1;
+                }
+            }
+        }
+        self.railway_sync_dirty = false;
+        self.building_aggregates_dirty = false;
+    }
+
+    /// Incrementally synchronizes railway tracks, trading post routes, and active cart schedules.
+    /// Returns `true` if `railway_links` was updated.
+    fn sync_railway_network(&mut self) -> bool {
         let mut stations: Vec<_> = self
             .buildings
             .iter()
@@ -731,131 +830,237 @@ impl SowEngine {
                 ..*building
             })
             .collect();
-        stations.sort_by_key(|station| station.id);
-        if !self.railway_network_initialized
-            || stations != self.trade_stations
-            || self.railway_routes_dirty
+        stations.sort_unstable_by_key(|station| station.id);
+
+        if self.railway_network_initialized && !self.railway_cache.ready {
+            self.railway_cache.hydrate(
+                &self.trade_stations,
+                &self.railway_tracks,
+                &self.railway_links,
+                self.state.map.width,
+                self.state.map.height,
+            );
+        }
+
+        let nuked_posts: std::collections::HashSet<u64> =
+            self.nuked_interrupted_posts.drain(..).collect();
+        if self.railway_network_initialized
+            && !self.railway_routes_dirty
+            && nuked_posts.is_empty()
+            && stations == self.trade_stations
         {
-            let previous_stations =
-                if !self.railway_network_initialized && self.railway_tracks.is_empty() {
-                    &[][..]
-                } else {
-                    &self.trade_stations[..]
-                };
-            let previous_by_id: std::collections::HashMap<_, _> = previous_stations
+            return false;
+        }
+
+        // O(N) two-pointer merge diff over ID-sorted station slices (zero HashMap allocs).
+        let (station_topology_changed, mut tp_meta_changed) =
+            diff_sorted_stations(&self.trade_stations, &stations);
+
+        // Fast Path A: Only City/Port ownership changed (no TP/topology/nuke/route dirtiness).
+        if self.railway_network_initialized
+            && !station_topology_changed
+            && tp_meta_changed.is_empty()
+            && !self.railway_routes_dirty
+            && nuked_posts.is_empty()
+        {
+            self.trade_stations = stations;
+            self.railway_cache
+                .sync_station_metadata(&self.trade_stations);
+            return false;
+        }
+
+        // Fast Path B: Only TradingPost owner/level changed (no topology/nuke/global dirty).
+        if self.railway_network_initialized
+            && !station_topology_changed
+            && !self.railway_routes_dirty
+            && nuked_posts.is_empty()
+        {
+            self.trade_stations = stations;
+            self.railway_cache
+                .sync_station_metadata(&self.trade_stations);
+            let updated = self.apply_tp_metadata_updates_in_place(&tp_meta_changed);
+            return updated;
+        }
+
+        // Incremental topology / delta routing path.
+        let delta = self.railway_cache.apply_topology_delta(
+            &stations,
+            &self.state,
+            &self.railway_links,
+            &self.trade_route_pending,
+            !self.railway_network_initialized && self.railway_tracks.is_empty(),
+        );
+        if delta.tracks_mutated || (!self.railway_network_initialized && self.railway_tracks.is_empty())
+        {
+            let tracks = self.railway_cache.tracks_vec();
+            if self.railway_tracks.as_ref() != &tracks {
+                self.railway_tracks = std::sync::Arc::new(tracks);
+            }
+        }
+
+        let full_route_recompute = !self.railway_network_initialized || self.railway_routes_dirty;
+        let mut target_post_ids: std::collections::HashSet<u64> = if full_route_recompute {
+            stations
                 .iter()
-                .map(|station| (station.id, station))
-                .collect();
-            let station_topology_changed = previous_stations.len() != stations.len()
-                || stations.iter().any(|station| {
-                    previous_by_id.get(&station.id).is_none_or(|old| {
-                        old.kind != station.kind || old.tile_idx != station.tile_idx
-                    })
-                });
-            let track_topology_changed = !self.railway_network_initialized
-                || stations.iter().any(|station| {
-                    previous_by_id.get(&station.id).is_none_or(|old| {
-                        old.kind != station.kind || old.tile_idx != station.tile_idx
-                    })
-                });
-            if track_topology_changed {
-                let tracks = crate::building::populate_railway_network(
-                    &stations,
-                    previous_stations,
-                    &self.state,
-                    self.railway_tracks.as_slice(),
-                    &mut self.railway_track_tile_index,
-                    &mut self.railway_track_index_ready,
-                );
-                if self.railway_tracks.as_ref() != &tracks {
-                    self.railway_tracks = std::sync::Arc::new(tracks);
+                .filter(|s| s.kind == crate::game::BuildingKind::TradingPost)
+                .map(|s| s.id)
+                .collect()
+        } else {
+            let affected_list = if delta.only_non_commercial_splits {
+                self.railway_cache
+                    .affected_posts_for_edges(&delta.split_edge_keys)
+            } else {
+                self.railway_cache
+                    .collect_affected_trading_posts(&delta.dirty_nodes)
+            };
+            let mut set: std::collections::HashSet<u64> = affected_list.into_iter().collect();
+            for &id in &nuked_posts {
+                set.insert(id);
+            }
+            if !delta.removed_station_ids.is_empty() {
+                let removed_set: std::collections::HashSet<u64> =
+                    delta.removed_station_ids.iter().copied().collect();
+                for link in self.railway_links.iter() {
+                    if removed_set.contains(&link.to_building_id) {
+                        set.insert(link.from_building_id);
+                    }
                 }
             }
-            let trading_post_changed = !self.railway_network_initialized
-                || stations
-                    .iter()
-                    .filter(|station| station.kind == crate::game::BuildingKind::TradingPost)
-                    .any(|station| {
-                        previous_by_id.get(&station.id).is_none_or(|old| {
-                            old.owner_id != station.owner_id || old.level != station.level
-                        })
-                    });
-            let routes_changed = !self.railway_network_initialized
-                || station_topology_changed
-                || trading_post_changed
-                || self.railway_routes_dirty;
-            if routes_changed {
-                let old_links = self.railway_links.as_ref().clone();
-                let old_progress = self.trade_route_progress.clone();
-                let planned_links = crate::building::populate_trading_post_routes(
-                    &stations,
-                    self.railway_tracks.as_slice(),
-                    &self.state,
-                    &old_links,
-                );
-                let old_by_post: std::collections::HashMap<_, _> = old_links
-                    .iter()
-                    .enumerate()
-                    .map(|(index, link)| (link.from_building_id, index))
-                    .collect();
-                let mut planned_by_post: std::collections::HashMap<_, _> = planned_links
-                    .into_iter()
-                    .map(|link| (link.from_building_id, link))
-                    .collect();
-                let mut links = Vec::with_capacity(planned_by_post.len());
-                let mut progress = Vec::with_capacity(planned_by_post.len());
-                let mut pending = Vec::with_capacity(planned_by_post.len());
-                let mut queue = std::collections::BinaryHeap::with_capacity(planned_by_post.len());
-                for post in stations
-                    .iter()
-                    .filter(|station| station.kind == crate::game::BuildingKind::TradingPost)
-                {
-                    let planned = planned_by_post.remove(&post.id);
-                    let old_index = old_by_post.get(&post.id).copied();
-                    let (current, current_progress, current_pending) = if let Some(old_index) =
-                        old_index
-                    {
-                        let old = &old_links[old_index];
-                        let old_progress = old_progress.get(old_index).copied().unwrap_or_default();
-                        if old.period_ticks == 0 || old.owner_id != post.owner_id {
-                            if let Some(next) = planned {
-                                let next_progress = crate::building::initial_trade_route_progress(
-                                    &self.state,
-                                    &next,
-                                    &stations,
-                                );
-                                (next, next_progress, Default::default())
-                            } else {
-                                continue;
-                            }
-                        } else if planned
-                            .as_ref()
-                            .is_some_and(|next| crate::building::same_route(old, next))
-                        {
-                            let next = planned.expect("route was checked above");
-                            let next_progress = if old.level != next.level
-                                || old.period_ticks != next.period_ticks
-                            {
-                                crate::building::reschedule_trade_route_progress(
-                                    &self.state,
-                                    &next,
-                                    old_progress,
-                                )
-                            } else {
-                                old_progress
-                            };
-                            (next, next_progress, Default::default())
+            for post in &tp_meta_changed {
+                let has_active_link = self
+                    .railway_cache
+                    .link_index_by_post
+                    .get(&post.id)
+                    .and_then(|&idx| self.railway_links.get(idx))
+                    .is_some_and(|l| l.period_ticks > 0);
+                if !has_active_link {
+                    set.insert(post.id);
+                }
+            }
+            set
+        };
+
+        // Any TP metadata changes NOT in `target_post_ids` get updated in O(1) first.
+        tp_meta_changed.retain(|post| !target_post_ids.contains(&post.id));
+        let tp_updated = if tp_meta_changed.is_empty() {
+            false
+        } else {
+            self.apply_tp_metadata_updates_in_place(&tp_meta_changed)
+        };
+
+        let mut links_changed = tp_updated;
+        let old_links = self.railway_links.as_slice();
+        let tp_count = stations
+            .iter()
+            .filter(|s| s.kind == crate::game::BuildingKind::TradingPost)
+            .count();
+
+        let post_membership_changed = station_topology_changed || !self.railway_network_initialized;
+        if !post_membership_changed && nuked_posts.is_empty() && target_post_ids.is_empty() && !full_route_recompute {
+            self.railway_routes_dirty = false;
+            self.trade_stations = stations;
+            self.railway_network_initialized = true;
+            return tp_updated;
+        }
+
+        let mut planned_by_post: std::collections::HashMap<u64, crate::building::RailwayLink> =
+            std::collections::HashMap::with_capacity(target_post_ids.len());
+        for post in stations
+            .iter()
+            .filter(|s| s.kind == crate::game::BuildingKind::TradingPost && target_post_ids.contains(&s.id))
+        {
+            let prev = self
+                .railway_cache
+                .link_index_by_post
+                .get(&post.id)
+                .and_then(|&idx| old_links.get(idx));
+            if let Some(link) = self
+                .railway_cache
+                .plan_single_trading_post_route(*post, &self.state, prev)
+            {
+                planned_by_post.insert(post.id, link);
+            }
+        }
+
+        // Fast Delta Update: if we don't need a full rebuild (`!full_route_recompute`), check if the
+        // set of active link post IDs matches `old_by_post` (no TP link added or removed). When
+        // membership is unchanged, update only the ~few dirty slots in place (0 clones of
+        // unchanged links and O(changed) queue updates).
+        if self.railway_network_initialized && !full_route_recompute {
+            let mut membership_changed = false;
+            let mut slot_updates: Vec<(
+                usize,
+                crate::building::RailwayLink,
+                crate::building::TradeRouteProgress,
+                crate::building::PendingTradeRoute,
+            )> = Vec::new();
+            let station_by_id = |id: u64| {
+                stations
+                    .binary_search_by_key(&id, |s| s.id)
+                    .ok()
+                    .map(|pos| stations[pos])
+            };
+            for &post_id in &target_post_ids {
+                let Some(post) = station_by_id(post_id) else {
+                    if self.railway_cache.link_index_by_post.contains_key(&post_id) {
+                        membership_changed = true;
+                        break;
+                    }
+                    continue;
+                };
+                if post.kind != crate::game::BuildingKind::TradingPost {
+                    continue;
+                }
+                let planned = planned_by_post.get(&post_id).cloned();
+                let old_index = self.railway_cache.link_index_by_post.get(&post_id).copied();
+                let was_nuked = nuked_posts.contains(&post_id);
+                match (old_index, planned) {
+                    (None, None) => {}
+                    (None, Some(_)) | (Some(_), None) => {
+                        membership_changed = true;
+                        break;
+                    }
+                    (Some(old_idx), Some(mut next)) => {
+                        let old = &old_links[old_idx];
+                        let old_progress = self
+                            .trade_route_progress
+                            .get(old_idx)
+                            .copied()
+                            .unwrap_or_default();
+                        if was_nuked {
+                            next.opened_at = self.state.tick;
+                            let next_progress = crate::building::initial_trade_route_progress(
+                                &self.state,
+                                &next,
+                                &stations,
+                            );
+                            slot_updates.push((old_idx, next, next_progress, Default::default()));
+                        } else if old.period_ticks == 0 || old.owner_id != post.owner_id {
+                            let next_progress = crate::building::initial_trade_route_progress(
+                                &self.state,
+                                &next,
+                                &stations,
+                            );
+                            slot_updates.push((old_idx, next, next_progress, Default::default()));
+                        } else if crate::building::same_route(old, &next) {
+                            let next_progress =
+                                if old.level != next.level || old.period_ticks != next.period_ticks
+                                {
+                                    crate::building::reschedule_trade_route_progress(
+                                        &self.state,
+                                        &next,
+                                        old_progress,
+                                    )
+                                } else {
+                                    old_progress
+                                };
+                            slot_updates.push((old_idx, next, next_progress, Default::default()));
                         } else {
                             let mut active = old.clone();
                             active.station_stop_count = active
                                 .station_path
                                 .iter()
-                                .filter_map(|id| {
-                                    stations
-                                        .binary_search_by_key(id, |station| station.id)
-                                        .ok()
-                                        .map(|index| stations[index])
-                                })
+                                .filter_map(|id| station_by_id(*id))
                                 .filter(|station| {
                                     matches!(
                                         station.kind,
@@ -866,16 +1071,96 @@ impl SowEngine {
                                 .count()
                                 .min(usize::from(u16::MAX))
                                 as u16;
-                            (
+                            slot_updates.push((
+                                old_idx,
                                 active,
                                 old_progress,
                                 crate::building::PendingTradeRoute {
                                     changed: true,
-                                    route: planned,
+                                    route: Some(next),
                                 },
-                            )
+                            ));
                         }
-                    } else if let Some(next) = planned {
+                    }
+                }
+            }
+            if !membership_changed {
+                let mut any_link_differs = false;
+                let mut any_route_edges_changed = false;
+                for (idx, link, prog, pend) in &slot_updates {
+                    if self.railway_links[*idx] != *link {
+                        any_link_differs = true;
+                        if self.railway_links[*idx].station_path != link.station_path {
+                            any_route_edges_changed = true;
+                        }
+                    }
+                    if pend.changed {
+                        any_route_edges_changed = true;
+                    }
+                    if let Some(old_p) = self.trade_route_progress.get_mut(*idx) {
+                        if old_p.next_arrival_tick != prog.next_arrival_tick && link.period_ticks > 0
+                        {
+                            self.trade_delivery_queue
+                                .push(std::cmp::Reverse((prog.next_arrival_tick, *idx)));
+                        }
+                        *old_p = *prog;
+                    }
+                    if let Some(old_pend) = self.trade_route_pending.get_mut(*idx) {
+                        *old_pend = pend.clone();
+                    }
+                }
+                if any_link_differs {
+                    let links_mut = std::sync::Arc::make_mut(&mut self.railway_links);
+                    for (idx, link, _, _) in slot_updates {
+                        if links_mut[idx] != link {
+                            links_mut[idx] = link;
+                        }
+                    }
+                    links_changed = true;
+                }
+                if any_route_edges_changed {
+                    self.railway_cache
+                        .rebuild_link_index(&self.railway_links, &self.trade_route_pending);
+                }
+                self.railway_routes_dirty = false;
+                self.trade_stations = stations;
+                return links_changed;
+            }
+        }
+        let old_by_post = &self.railway_cache.link_index_by_post;
+
+        let mut links = Vec::with_capacity(tp_count);
+        let mut progress = Vec::with_capacity(tp_count);
+        let mut pending = Vec::with_capacity(tp_count);
+        let mut queue = std::collections::BinaryHeap::with_capacity(tp_count);
+
+        for post in stations
+            .iter()
+            .filter(|station| station.kind == crate::game::BuildingKind::TradingPost)
+        {
+            let old_index = old_by_post.get(&post.id).copied();
+            let was_nuked = nuked_posts.contains(&post.id);
+            let recomputed = target_post_ids.remove(&post.id);
+
+            let (current, current_progress, current_pending) = if !recomputed && !was_nuked {
+                if let Some(old_idx) = old_index {
+                    let old_link = &old_links[old_idx];
+                    if old_link.period_ticks == 0 && old_link.owner_id != post.owner_id {
+                        continue;
+                    }
+                    (
+                        old_link.clone(),
+                        self.trade_route_progress.get(old_idx).copied().unwrap_or_default(),
+                        self.trade_route_pending.get(old_idx).cloned().unwrap_or_default(),
+                    )
+                } else {
+                    continue;
+                }
+            } else {
+                let planned = planned_by_post.remove(&post.id);
+                if was_nuked {
+                    if let Some(mut next) = planned {
+                        next.opened_at = self.state.tick;
                         let next_progress = crate::building::initial_trade_route_progress(
                             &self.state,
                             &next,
@@ -884,39 +1169,190 @@ impl SowEngine {
                         (next, next_progress, Default::default())
                     } else {
                         continue;
-                    };
-                    let index = links.len();
-                    if current.period_ticks > 0 {
-                        queue.push(std::cmp::Reverse((
-                            current_progress.next_arrival_tick,
-                            index,
-                        )));
                     }
-                    links.push(current);
-                    progress.push(current_progress);
-                    pending.push(current_pending);
+                } else if let Some(old_index) = old_index {
+                    let old = &old_links[old_index];
+                    let old_progress = self
+                        .trade_route_progress
+                        .get(old_index)
+                        .copied()
+                        .unwrap_or_default();
+                    if old.period_ticks == 0 || old.owner_id != post.owner_id {
+                        if let Some(next) = planned {
+                            let next_progress = crate::building::initial_trade_route_progress(
+                                &self.state,
+                                &next,
+                                &stations,
+                            );
+                            (next, next_progress, Default::default())
+                        } else {
+                            continue;
+                        }
+                    } else if planned
+                        .as_ref()
+                        .is_some_and(|next| crate::building::same_route(old, next))
+                    {
+                        let next = planned.expect("route checked");
+                        let next_progress =
+                            if old.level != next.level || old.period_ticks != next.period_ticks {
+                                crate::building::reschedule_trade_route_progress(
+                                    &self.state,
+                                    &next,
+                                    old_progress,
+                                )
+                            } else {
+                                old_progress
+                            };
+                        (next, next_progress, Default::default())
+                    } else {
+                        let mut active = old.clone();
+                        active.station_stop_count = active
+                            .station_path
+                            .iter()
+                            .filter_map(|id| {
+                                stations
+                                    .binary_search_by_key(id, |station| station.id)
+                                    .ok()
+                                    .map(|index| stations[index])
+                            })
+                            .filter(|station| {
+                                matches!(
+                                    station.kind,
+                                    crate::game::BuildingKind::City | crate::game::BuildingKind::Port
+                                )
+                            })
+                            .count()
+                            .min(usize::from(u16::MAX)) as u16;
+                        (
+                            active,
+                            old_progress,
+                            crate::building::PendingTradeRoute {
+                                changed: true,
+                                route: planned,
+                            },
+                        )
+                    }
+                } else if let Some(next) = planned {
+                    let next_progress = crate::building::initial_trade_route_progress(
+                        &self.state,
+                        &next,
+                        &stations,
+                    );
+                    (next, next_progress, Default::default())
+                } else {
+                    continue;
                 }
-                if self.railway_links.as_ref() != &links {
-                    self.railway_links = std::sync::Arc::new(links);
-                }
-                self.trade_route_progress = progress;
-                self.trade_route_pending = pending;
-                self.railway_routes_dirty = false;
-                self.trade_delivery_queue = queue;
+            };
+
+            let index = links.len();
+            if current.period_ticks > 0 {
+                queue.push(std::cmp::Reverse((
+                    current_progress.next_arrival_tick,
+                    index,
+                )));
             }
-            self.trade_stations = stations;
-            self.railway_network_initialized = true;
+            links.push(current);
+            progress.push(current_progress);
+            pending.push(current_pending);
         }
-        for link in self.railway_links.iter() {
-            if link.period_ticks == 0 {
+
+        if self.railway_links.as_ref() != &links {
+            self.railway_links = std::sync::Arc::new(links);
+            self.railway_cache
+                .rebuild_link_index(&self.railway_links, &pending);
+            links_changed = true;
+        } else if pending.iter().any(|p| p.changed) {
+            self.railway_cache
+                .rebuild_link_index(&self.railway_links, &pending);
+        }
+        self.trade_route_progress = progress;
+        self.trade_route_pending = pending;
+        self.railway_routes_dirty = false;
+        self.trade_delivery_queue = queue;
+        self.trade_stations = stations;
+        self.railway_network_initialized = true;
+        links_changed
+    }
+
+    fn apply_tp_metadata_updates_in_place(&mut self, changed_tps: &[Building]) -> bool {
+        if changed_tps.is_empty() {
+            return false;
+        }
+        let mut any_link_updated = false;
+        for &post in changed_tps {
+            let Some(&idx) = self.railway_cache.link_index_by_post.get(&post.id) else {
+                continue;
+            };
+            let current = match self.railway_links.get(idx) {
+                Some(l) if l.period_ticks > 0 => l,
+                _ => continue,
+            };
+            if current.owner_id == post.owner_id && current.level == post.level {
                 continue;
             }
-            if let Some(aggregate) = self.building_aggregates.get_mut(usize::from(link.owner_id)) {
-                aggregate.land_trade_income_weight += link.weight(self.state.map.width);
-                aggregate.railway_connections += 1;
+            let links = std::sync::Arc::make_mut(&mut self.railway_links);
+            let link = &mut links[idx];
+            let owner_changed = link.owner_id != post.owner_id;
+            let new_period = crate::building::trading_post_period_ticks(
+                link.distance,
+                post.level,
+                &self.state.config,
+            );
+            if owner_changed {
+                link.owner_id = post.owner_id;
+                link.level = post.level;
+                link.period_ticks = new_period;
+                link.opened_at = self.state.tick;
+                let next_progress = crate::building::initial_trade_route_progress(
+                    &self.state,
+                    link,
+                    &self.trade_stations,
+                );
+                if let Some(slot) = self.trade_route_progress.get_mut(idx) {
+                    if slot.next_arrival_tick != next_progress.next_arrival_tick {
+                        self.trade_delivery_queue
+                            .push(std::cmp::Reverse((next_progress.next_arrival_tick, idx)));
+                    }
+                    *slot = next_progress;
+                }
+                if let Some(slot) = self.trade_route_pending.get_mut(idx) {
+                    *slot = Default::default();
+                }
+            } else {
+                link.opened_at = crate::building::phase_continuous_opened_at(
+                    self.state.tick,
+                    link.opened_at,
+                    link.period_ticks,
+                    new_period,
+                );
+                link.level = post.level;
+                link.period_ticks = new_period;
+                if let Some(old_progress) = self.trade_route_progress.get(idx).copied() {
+                    let next_progress = crate::building::reschedule_trade_route_progress(
+                        &self.state,
+                        link,
+                        old_progress,
+                    );
+                    if old_progress.next_arrival_tick != next_progress.next_arrival_tick {
+                        self.trade_delivery_queue
+                            .push(std::cmp::Reverse((next_progress.next_arrival_tick, idx)));
+                    }
+                    self.trade_route_progress[idx] = next_progress;
+                }
+                if let Some(pending) = self.trade_route_pending.get_mut(idx)
+                    && let Some(ref mut pending_route) = pending.route
+                {
+                    pending_route.level = post.level;
+                    pending_route.period_ticks = crate::building::trading_post_period_ticks(
+                        pending_route.distance,
+                        post.level,
+                        &self.state.config,
+                    );
+                }
             }
+            any_link_updated = true;
         }
-        self.building_aggregates_dirty = false;
+        any_link_updated
     }
 
     pub fn new(mut state: GameState, water: WaterComponents) -> Self {
@@ -961,9 +1397,10 @@ impl SowEngine {
             trade_route_progress: Vec::new(),
             trade_route_pending: Vec::new(),
             railway_routes_dirty: false,
+            railway_sync_dirty: false,
             railway_network_initialized: false,
-            railway_track_tile_index: std::collections::HashMap::new(),
-            railway_track_index_ready: false,
+            nuked_interrupted_posts: Vec::new(),
+            railway_cache: crate::building::RailwayRuntimeCache::default(),
             trade_stations: Vec::new(),
             trade_delivery_queue: std::collections::BinaryHeap::new(),
             trade_last_delivery_tick: 0,
@@ -2608,8 +3045,11 @@ mod tests {
         assert!(
             crate::game::BuildingKind::ALL
                 .into_iter()
+                .filter(|kind| kind.is_enabled())
                 .all(|kind| custom.campaign_allows_building(kind, 1))
         );
+        assert!(!custom.campaign_allows_building(crate::game::BuildingKind::SAM, 1));
+        assert!(!custom.campaign_allows_building(crate::game::BuildingKind::MissileSilo, 1));
         assert!(!custom.set_campaign_unlocks(crate::campaign::CampaignUnlocks::default()));
 
         let mut tutorial_state = GameState::new(1, 4, 4, GameConfig::default());

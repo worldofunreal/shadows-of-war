@@ -1,4 +1,7 @@
-use crate::building::{find_structure_site_near, structure_build_cost_gold};
+use crate::building::{
+    CityAnchor, city_anchors_from_buildings, city_construction_radius, find_structure_site_near,
+    nearest_match_structure_site_in_bounds, structure_build_cost_gold, validate_match_structure_site,
+};
 use crate::engine::SowEngine;
 
 use crate::game::BuildingKind;
@@ -32,7 +35,11 @@ pub(super) fn bot_structure_target_count(
             (base.floor() as u32).max(1)
         }
         BuildingKind::TradingPost => {
-            let val = ((city_equivalent as f64) * 0.65 * factor).floor() as u32;
+            let val = ((city_equivalent as f64) * 0.55 * factor).floor() as u32;
+            if factor >= 0.4 { val.max(1) } else { val }
+        }
+        BuildingKind::Farm => {
+            let val = ((city_equivalent as f64) * 0.55 * factor).floor() as u32;
             if factor >= 0.4 { val.max(1) } else { val }
         }
         BuildingKind::Port => {
@@ -40,7 +47,7 @@ pub(super) fn bot_structure_target_count(
             if factor >= 0.4 { val.max(1) } else { val }
         }
         BuildingKind::MilitaryCamp => {
-            let val = ((city_equivalent as f64) * 0.45 * factor).floor() as u32;
+            let val = ((city_equivalent as f64) * 0.40 * factor).floor() as u32;
             if factor >= 0.4 { val.max(1) } else { val }
         }
         BuildingKind::SAM | BuildingKind::MissileSilo => 0,
@@ -71,38 +78,6 @@ pub(super) fn think_window_ticks(
     (min, max)
 }
 
-pub(super) fn pick_stack_click_tile(
-    buildings: &[crate::building::Building],
-    building_productions: &std::collections::HashMap<u64, crate::building::CityArsenalState>,
-    bot_id: u16,
-    kind: BuildingKind,
-    max_level: u8,
-) -> Option<u32> {
-    let mut best: Option<(u8, u64, u32)> = None;
-    for b in buildings {
-        if b.owner_id != bot_id
-            || b.kind != kind
-            || b.under_construction
-            || b.level >= kind.max_level()
-            || b.level.saturating_add(1) > max_level
-            || building_productions
-                .get(&b.id)
-                .is_some_and(|state| state.is_building())
-        {
-            continue;
-        }
-        let cand = (b.level, b.id, b.tile_idx);
-        match best {
-            None => best = Some(cand),
-            Some((bl, bid, _)) if b.level < bl || (b.level == bl && b.id < bid) => {
-                best = Some(cand);
-            }
-            _ => {}
-        }
-    }
-    best.map(|(_, _, tile)| tile)
-}
-
 pub(super) fn stack_build_decision(
     engine: &SowEngine,
     bot_id: u16,
@@ -110,17 +85,28 @@ pub(super) fn stack_build_decision(
     player_gold: f64,
     max_level: u8,
 ) -> Option<BotDecision> {
-    let stack_tile = pick_stack_click_tile(
-        &engine.buildings,
-        &engine.building_productions,
-        bot_id,
-        kind,
-        max_level,
-    )?;
-    let building = engine
-        .buildings
-        .iter()
-        .find(|b| b.owner_id == bot_id && b.kind == kind && b.tile_idx == stack_tile)?;
+    let mut best: Option<(u8, u64, &crate::building::Building)> = None;
+    for b in &engine.buildings {
+        if b.owner_id != bot_id
+            || b.kind != kind
+            || b.under_construction
+            || engine
+                .building_productions
+                .get(&b.id)
+                .is_some_and(|state| state.is_building())
+        {
+            continue;
+        }
+        let cap = max_level.min(engine.building_upgrade_level_cap(*b));
+        if b.level >= cap {
+            continue;
+        }
+        let cand = (b.level, b.id, b);
+        if best.is_none_or(|(bl, bid, _)| b.level < bl || (b.level == bl && b.id < bid)) {
+            best = Some(cand);
+        }
+    }
+    let building = best?.2;
     let (cost, _) = engine.paid_structure_upgrade_quote(*building);
     if player_gold < cost {
         return None;
@@ -132,6 +118,139 @@ pub(super) fn stack_build_decision(
             building_id: building.id,
         },
     })
+}
+
+/// Finds a valid district placement inside an owned active City's construction radius,
+/// preferring the City closest to `preferred_probe` (or any owned City if `None`).
+pub(super) fn find_district_site_in_owned_cities(
+    engine: &SowEngine,
+    bot_id: u16,
+    kind: BuildingKind,
+    preferred_probe: Option<u32>,
+) -> Option<u32> {
+    let map = &engine.state.map;
+    if map.width == 0 || map.height == 0 || !kind.is_non_city() {
+        return None;
+    }
+    let cities = city_anchors_from_buildings(&engine.buildings, map.width);
+    let mut owned_cities: Vec<CityAnchor> = cities
+        .iter()
+        .copied()
+        .filter(|c| c.owner_id == bot_id && c.active_level >= 1)
+        .collect();
+    if owned_cities.is_empty() {
+        return None;
+    }
+    if let Some(probe) = preferred_probe {
+        let px = probe % map.width;
+        let py = probe / map.width;
+        owned_cities.sort_by_key(|c| {
+            let dx = c.x.abs_diff(px);
+            let dy = c.y.abs_diff(py);
+            (dx * dx + dy * dy, c.id)
+        });
+    }
+    let cfg = &engine.state.config;
+    for city in owned_cities {
+        let radius = city_construction_radius(city.active_level, cfg) as i32;
+        let (ax, ay) = preferred_probe
+            .map(|p| ((p % map.width) as i32, (p / map.width) as i32))
+            .filter(|&(px, py)| {
+                let dx = i64::from(px) - i64::from(city.x as i32);
+                let dy = i64::from(py) - i64::from(city.y as i32);
+                dx * dx + dy * dy <= i64::from(radius) * i64::from(radius)
+            })
+            .unwrap_or((city.x as i32, city.y as i32));
+        if let Some(site) = nearest_match_structure_site_in_bounds(
+            map,
+            bot_id,
+            kind,
+            ax,
+            ay,
+            radius * 2,
+            &engine.building_grid,
+            &cities,
+            Some(city.id),
+            cfg,
+            (
+                city.x as i32 - radius,
+                city.y as i32 - radius,
+                city.x as i32 + radius,
+                city.y as i32 + radius,
+            ),
+        ) {
+            return Some(site);
+        }
+    }
+    None
+}
+
+pub(super) fn find_city_site_from_candidates(
+    engine: &SowEngine,
+    bot_id: u16,
+    candidates: StructureCandidates<'_>,
+) -> Option<u32> {
+    let map = &engine.state.map;
+    let w = map.width;
+    if w == 0 || map.height == 0 {
+        return None;
+    }
+    let cities = city_anchors_from_buildings(&engine.buildings, w);
+    let cfg = &engine.state.config;
+    for &(nx, ny) in candidates.interior {
+        if !map.is_valid_coord(nx, ny) {
+            continue;
+        }
+        let idx = ny as u32 * w + nx as u32;
+        if validate_match_structure_site(
+            map,
+            bot_id,
+            BuildingKind::City,
+            idx,
+            &engine.building_grid,
+            &cities,
+            None,
+            cfg,
+        )
+        .is_ok()
+        {
+            return Some(idx);
+        }
+        if let Some(site) = nearest_match_structure_site_in_bounds(
+            map,
+            bot_id,
+            BuildingKind::City,
+            nx,
+            ny,
+            8,
+            &engine.building_grid,
+            &cities,
+            None,
+            cfg,
+            (0, 0, map.width as i32 - 1, map.height as i32 - 1),
+        ) {
+            return Some(site);
+        }
+    }
+    for &idx in candidates.border {
+        let (bx, by) = ((idx % w) as i32, (idx / w) as i32);
+        if let Some(site) = nearest_match_structure_site_in_bounds(
+            map,
+            bot_id,
+            BuildingKind::City,
+            bx,
+            by,
+            8,
+            &engine.building_grid,
+            &cities,
+            None,
+            cfg,
+            (0, 0, map.width as i32 - 1, map.height as i32 - 1),
+        ) {
+            return Some(site);
+        }
+    }
+    None
 }
 
 pub(super) const PLACEMENT_ATTEMPTS: i32 = 8;

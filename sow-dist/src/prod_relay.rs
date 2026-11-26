@@ -198,7 +198,10 @@ printf '%s\n' "$backup"
             &[BACKUP_PATHS],
         )?;
         ensure!(
-            location.starts_with(&format!("{}/.relay-rollback.", site::current().release_root())),
+            location.starts_with(&format!(
+                "{}/.relay-rollback.",
+                site::current().release_root()
+            )),
             "invalid rollback directory"
         );
         println!("  previous production settings saved at {location}");
@@ -313,13 +316,18 @@ install -m 0555 "$ops/sow-relay-cert-deploy" /usr/local/etc/letsencrypt/renewal-
 pub(super) fn certificate(config: &Config) -> Result<()> {
     let lineage = tls_lineage();
     // The hook serves every site's lineage, so the lineage must be named explicitly.
-    run_root(config, r#"
+    run_root(
+        config,
+        r#"
 lineage=$1
 hook=$2
 openssl x509 -in "$lineage/fullchain.pem" -noout -checkend 2592000 >/dev/null
 installed=__SITE_SERVER_ROOT__/usr/local/etc/sow/relay-tls/current/relay.crt
 if ! cmp -s "$lineage/fullchain.pem" "$installed"; then RENEWED_LINEAGE="$lineage" "$hook"; fi
-"#, &[&lineage, TLS_HOOK]).context("install site certificate for local relay control")?;
+"#,
+        &[&lineage, TLS_HOOK],
+    )
+    .context("install site certificate for local relay control")?;
     Ok(())
 }
 

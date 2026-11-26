@@ -928,6 +928,7 @@ impl SowEngine {
                         District::TradingPost => BuildingKind::TradingPost,
                         District::Port => BuildingKind::Port,
                         District::MilitaryCamp => BuildingKind::MilitaryCamp,
+                        District::Farm => BuildingKind::Farm,
                     }),
                     Source::Territory => true,
                     Source::Alliance => !p.alliances.is_empty(),

@@ -8,9 +8,9 @@ use crate::profile::{
 };
 use crate::redb_store::{
     MATCH_ID_ALLOCATOR_TABLE, MATCH_STARTS_TABLE, MATCHES_TABLE,
-    PENDING_REPLAY_VERIFICATIONS_TABLE,
-    PLAYER_MATCH_INDEX_TABLE, PUBLIC_PROFILES_TABLE, RANKED_BOTS_TABLE, SEASON_RATINGS_TABLE,
-    SEASONS_TABLE, VERIFIED_VICTORY_BOARD_TABLE,
+    PENDING_REPLAY_VERIFICATIONS_TABLE, PLAYER_MATCH_INDEX_TABLE, PUBLIC_PROFILES_TABLE,
+    RANKED_BOTS_TABLE, RANKED_LEADERBOARD_TABLE, SEASON_RATINGS_TABLE, SEASONS_TABLE,
+    VERIFIED_VICTORY_BOARD_TABLE, ranked_leaderboard_key,
 };
 use log::info;
 use redb::{ReadableTable, WriteTransaction};
@@ -561,7 +561,8 @@ const INTRO_SKIN_RECEIPT: &str = "campaign:moon_rabbit";
 
 impl PlayerProfile {
     fn needs_intro_skin(&self) -> bool {
-        self.completed_episodes.contains(crate::campaign::INTRO_EPISODE_ID)
+        self.completed_episodes
+            .contains(crate::campaign::INTRO_EPISODE_ID)
             && !self.owned_skins.contains(crate::commerce::INTRO_SKIN_ID)
     }
 
@@ -659,7 +660,10 @@ impl PlayerProfile {
         let mut leader_wins_map = std::collections::BTreeMap::new();
         for (name, stats) in &self.leader_stats {
             leader_matches.insert(name.clone(), stats.matches_played as u64);
-            leader_wins_map.insert(name.clone(), (stats.verified_wins as u64).max(stats.wins as u64));
+            leader_wins_map.insert(
+                name.clone(),
+                (stats.verified_wins as u64).max(stats.wins as u64),
+            );
         }
         let mut owned_set = self.owned_leaders.clone();
         for leader in &self.purchased_leaders {
@@ -694,10 +698,14 @@ impl PlayerProfile {
             empires_defeated: self.empires_defeated as u64,
             tribes_defeated: self.tribes_defeated as u64,
             completed_episodes: self.completed_episodes.len() as u64,
-            advanced_tactics_completed: ["adv_tactics_01_naval", "adv_tactics_02_atomic", "adv_tactics_03_skirmish"]
-                .iter()
-                .filter(|id| self.completed_episodes.contains(**id))
-                .count() as u64,
+            advanced_tactics_completed: [
+                "adv_tactics_01_naval",
+                "adv_tactics_02_atomic",
+                "adv_tactics_03_skirmish",
+            ]
+            .iter()
+            .filter(|id| self.completed_episodes.contains(**id))
+            .count() as u64,
             owned_leaders_count: owned_set.len() as u64,
             owned_leaders: owned_set,
             skins_owned: skins_set.len() as u64,
@@ -981,6 +989,7 @@ pub struct PlayerDb {
     connection: std::sync::Arc<tokio::sync::RwLock<Option<redis::aio::MultiplexedConnection>>>,
     pub crazygames_api_key: Option<String>,
     pub redb_db: Option<std::sync::Arc<redb::Database>>,
+    leaderboard_epoch: std::sync::Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl PlayerDb {
@@ -996,17 +1005,32 @@ impl PlayerDb {
             connection: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
             crazygames_api_key,
             redb_db,
+            leaderboard_epoch: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(1)),
         }
     }
 
-    pub(crate) async fn get_connection(&self) -> Result<redis::aio::MultiplexedConnection, redis::RedisError> {
+    pub fn leaderboard_epoch(&self) -> u64 {
+        self.leaderboard_epoch
+            .load(std::sync::atomic::Ordering::Acquire)
+    }
+
+    pub(crate) fn bump_leaderboard_epoch(&self) {
+        self.leaderboard_epoch
+            .fetch_add(1, std::sync::atomic::Ordering::Release);
+    }
+
+    pub(crate) async fn get_connection(
+        &self,
+    ) -> Result<redis::aio::MultiplexedConnection, redis::RedisError> {
         if let Some(conn) = self.connection.read().await.as_ref() {
             return Ok(conn.clone());
         }
         self.reset_connection().await
     }
 
-    pub(crate) async fn reset_connection(&self) -> Result<redis::aio::MultiplexedConnection, redis::RedisError> {
+    pub(crate) async fn reset_connection(
+        &self,
+    ) -> Result<redis::aio::MultiplexedConnection, redis::RedisError> {
         let mut guard = self.connection.write().await;
         let connection = self.client.get_multiplexed_async_connection().await?;
         info!("Established shared multiplexed Valkey connection.");
@@ -1066,14 +1090,9 @@ impl PlayerDb {
         let account = self.load_account(account_id).await?;
         let initial_mmr = match account.kind {
             AccountKind::Human => 1000.0,
-            AccountKind::Bot => {
-                let bot = account
-                    .profile
-                    .ranked_bot
-                    .as_ref()
-                    .ok_or("account is not a ranked bot")?;
+            AccountKind::Bot => account.profile.ranked_bot.as_ref().map_or(1000.0, |bot| {
                 1000.0 + f64::from(bot.iq.saturating_sub(60)) * 20.0
-            }
+            }),
         };
         let key = format!(
             "rating:{}:{}:Ranked1v1:FFA",
@@ -1178,7 +1197,10 @@ impl PlayerDb {
         let Some(record) = self.load_match_record(match_id)? else {
             return Ok(None);
         };
-        if record.queue != "Ranked1v1" || !record.verified || !record.rating_eligible {
+        if !matches!(record.queue.as_str(), "Ranked1v1" | "RankedFFA")
+            || !record.verified
+            || !record.rating_eligible
+        {
             return Ok(None);
         }
         let Some(participant) = record
@@ -1199,6 +1221,9 @@ impl PlayerDb {
         let (tier_before, division_before) = crate::profile::tier_for_score(score_before);
         let (tier_after, division_after) = crate::profile::tier_for_score(score_after);
         Ok(Some(crate::profile::RankedResultPresentation {
+            queue: record.queue.clone(),
+            placement: participant.placement,
+            total_contenders: record.participants.len().min(usize::from(u16::MAX)) as u16,
             ladder: Some(crate::profile::ranked_ladder()),
             score_before,
             score_after,
@@ -1395,7 +1420,10 @@ impl PlayerDb {
         let Ok(mut con) = self.get_connection().await else {
             return;
         };
-        let key = format!("sow:analytics:mission_ops:{}", crate::events::utc_date_string());
+        let key = format!(
+            "sow:analytics:mission_ops:{}",
+            crate::events::utc_date_string()
+        );
         let mut pipe = redis::pipe();
         for field in ops {
             pipe.cmd("HINCRBY").arg(&key).arg(field).arg(1);
@@ -1631,7 +1659,7 @@ impl PlayerDb {
             provisional: record.provisional,
             rating_delta: participant.rating_delta,
             ranked_points_breakdown: participant.ranked_points_breakdown.clone(),
-            ranked_bot_iq: record.ranked_bot_iq,
+            ranked_bot_iq: None,
         })
     }
 
@@ -1661,19 +1689,10 @@ impl PlayerDb {
         let account = match self.public_index(account_id)? {
             Some(index) => self.load_account(&index.account_id).await?,
             None => match self.load_account(account_id).await {
-                Ok(account)
-                    if account.kind == AccountKind::Bot && account.profile.ranked_bot.is_some() =>
-                {
-                    account
-                }
+                Ok(account) if account.kind == AccountKind::Bot => account,
                 _ => return Ok(None),
             },
         };
-        if account.kind == AccountKind::Bot && account.profile.ranked_bot.is_none() {
-            return Ok(None);
-        }
-        let ranked_bot_iq = account.profile.ranked_bot.as_ref().map(|bot| bot.iq);
-        let ranked_bot = account.kind == AccountKind::Bot && ranked_bot_iq.is_some();
         let mut leader_stats = account.profile.leader_stats.clone();
         for (leader, xp) in &account.profile.leader_xp {
             leader_stats
@@ -1704,32 +1723,33 @@ impl PlayerDb {
                 .then_with(|| right.xp.cmp(&left.xp))
         });
         let recent_matches = self
-            .match_history_for_account(&account.id, 0, 10, ranked_bot.then_some("Ranked1v1"), None)?
+            .match_history_for_account(&account.id, 0, 10, None, None)?
             .iter()
             .filter_map(|record| Self::public_match_summary(&account.id, record))
             .collect();
         let ratings = self.public_ratings(&account.id).await?.unwrap_or_default();
-        Ok(Some(PublicProfileView {
-            ranked_ladder: Some(crate::profile::ranked_ladder()),
-            account_id: account.id.clone(),
-            handle: public_handle(&account.display_name, &account.id),
-            display_name: account.display_name,
-            is_bot: ranked_bot,
-            ranked_bot_iq,
-            level: account.profile.level,
-            matches_played: account.profile.matches_played,
-            wins: account.profile.verified_wins,
-            win_rate: win_rate(
-                account.profile.verified_wins,
-                account.profile.matches_played,
-            ),
-            kills: account.profile.kills,
-            deaths: account.profile.deaths,
-            assists: account.profile.assists,
-            players_defeated: account.profile.players_defeated,
-            empires_defeated: account.profile.empires_defeated,
-            tribes_defeated: account.profile.tribes_defeated,
-            preferred_leader: account.profile.preferred_leader.clone(),
+            let preferred_leader = account_store::account_preferred_leader(&account);
+            Ok(Some(PublicProfileView {
+                ranked_ladder: Some(crate::profile::ranked_ladder()),
+                account_id: account.id.clone(),
+                handle: public_handle(&account.display_name, &account.id),
+                display_name: account.display_name,
+                is_bot: false,
+                ranked_bot_iq: None,
+                level: account.profile.level,
+                matches_played: account.profile.matches_played,
+                wins: account.profile.verified_wins,
+                win_rate: win_rate(
+                    account.profile.verified_wins,
+                    account.profile.matches_played,
+                ),
+                kills: account.profile.kills,
+                deaths: account.profile.deaths,
+                assists: account.profile.assists,
+                players_defeated: account.profile.players_defeated,
+                empires_defeated: account.profile.empires_defeated,
+                tribes_defeated: account.profile.tribes_defeated,
+                preferred_leader,
             laurels: account.profile.laurels,
             achievements: account.profile.achievement_views(),
             leaders,
@@ -1786,30 +1806,61 @@ impl PlayerDb {
             return Ok(Vec::new());
         };
         let needle = query.trim().to_lowercase();
-        let read_txn = db.begin_read()?;
-        let table = read_txn.open_table(PUBLIC_PROFILES_TABLE)?;
-        let mut indexes = Vec::new();
-        for item in table.iter()? {
-            let (_, value) = item?;
-            let index: PublicProfileIndex = serde_json::from_slice(value.value())?;
-            if index.kind == "Bot" {
-                continue;
-            }
-            if needle.is_empty()
-                || index.display_name.to_lowercase().contains(&needle)
-                || index.account_id.to_lowercase().contains(&needle)
-            {
-                indexes.push(index);
-            }
-            if indexes.len() >= limit {
-                break;
+        let limit = limit.clamp(1, 200);
+        if needle.chars().count() < 2 {
+            return Ok(Vec::new());
+        }
+        let mut ranked_matches: Vec<(u8, u32, PublicProfileIndex)> = Vec::new();
+        {
+            let read_txn = db.begin_read()?;
+            let table = read_txn.open_table(PUBLIC_PROFILES_TABLE)?;
+            for item in table.iter()? {
+                let (_, value) = item?;
+                let index: PublicProfileIndex = serde_json::from_slice(value.value())?;
+                if index.kind == "Bot" {
+                    continue;
+                }
+                let lower_name = index.display_name.to_lowercase();
+                let score = if lower_name == needle {
+                    3
+                } else if lower_name.starts_with(&needle) {
+                    2
+                } else if lower_name.contains(&needle)
+                    || index.account_id.to_lowercase().contains(&needle)
+                {
+                    1
+                } else {
+                    0
+                };
+                if score > 0 {
+                    ranked_matches.push((score, index.verified_wins, index));
+                }
             }
         }
-        drop(table);
-        drop(read_txn);
-        let mut result = Vec::with_capacity(indexes.len());
-        for index in indexes {
-            if let Ok(account) = self.load_account(&index.account_id).await
+        ranked_matches.sort_by(|left, right| {
+            right
+                .0
+                .cmp(&left.0)
+                .then_with(|| right.1.cmp(&left.1))
+                .then_with(|| left.2.account_id.cmp(&right.2.account_id))
+        });
+        ranked_matches.truncate(limit);
+        let mut result = Vec::with_capacity(ranked_matches.len());
+        for (_, _, index) in ranked_matches {
+            if index.level > 0 || index.matches_played > 0 {
+                result.push(PublicProfileSummary {
+                    handle: public_handle(&index.display_name, &index.account_id),
+                    account_id: index.account_id,
+                    display_name: index.display_name,
+                    level: index.level,
+                    matches_played: index.matches_played,
+                    wins: index.verified_wins,
+                    win_rate: win_rate(index.verified_wins, index.matches_played),
+                    kills: 0,
+                    deaths: 0,
+                    assists: 0,
+                });
+            } else if let Ok(account) = self.load_account(&index.account_id).await
                 && account.kind != AccountKind::Bot
             {
                 result.push(Self::public_summary(&account));
@@ -1829,27 +1880,16 @@ impl PlayerDb {
         let account = match self.public_index(account_id)? {
             Some(index) => self.load_account(&index.account_id).await?,
             None => match self.load_account(account_id).await {
-                Ok(account)
-                    if account.kind == AccountKind::Bot && account.profile.ranked_bot.is_some() =>
-                {
-                    account
-                }
+                Ok(account) if account.kind == AccountKind::Bot => account,
                 _ => return Ok(None),
             },
         };
-        let ranked_bot = account.kind == AccountKind::Bot && account.profile.ranked_bot.is_some();
-        if account.kind == AccountKind::Bot && !ranked_bot {
-            return Ok(None);
-        }
-        if ranked_bot && queue.is_some_and(|value| value != "Ranked1v1") {
-            return Ok(Some(Vec::new()));
-        }
         Ok(Some(
             self.match_history_for_account(
                 &account.id,
                 offset,
                 limit.saturating_add(1),
-                if ranked_bot { Some("Ranked1v1") } else { queue },
+                queue,
                 mode,
             )?
             .iter()
@@ -1872,7 +1912,7 @@ impl PlayerDb {
             .map(|participant| PublicMatchParticipant {
                 account_id: participant.account_id.clone(),
                 handle: public_handle(&participant.display_name, &participant.account_id),
-                is_bot: participant.is_bot,
+                is_bot: false,
                 leader: participant
                     .leader
                     .as_deref()
@@ -1904,7 +1944,7 @@ impl PlayerDb {
             verified: record.verified,
             provisional: record.provisional,
             rating_eligible: record.rating_eligible,
-            ranked_bot_iq: record.ranked_bot_iq,
+            ranked_bot_iq: None,
             participants,
         }))
     }
@@ -1958,11 +1998,7 @@ impl PlayerDb {
         let account = match indexed {
             Some(index) => self.load_account(&index.account_id).await?,
             None => match self.load_account(account_id).await {
-                Ok(account)
-                    if account.kind == AccountKind::Bot && account.profile.ranked_bot.is_some() =>
-                {
-                    account
-                }
+                Ok(account) if account.kind == AccountKind::Bot => account,
                 _ => return Ok(None),
             },
         };
@@ -1970,17 +2006,18 @@ impl PlayerDb {
             return Ok(Some(Vec::new()));
         };
         let prefix = format!("rating:{}:", account.id);
+        let upper = format!("{prefix}\u{10ffff}");
         let read_txn = db.begin_read()?;
         let table = read_txn.open_table(SEASON_RATINGS_TABLE)?;
         let mut ratings = Vec::new();
-        for item in table.iter()? {
-            let (key, value) = item?;
-            if key.value().starts_with(&prefix) {
-                let mut rating = serde_json::from_slice::<SeasonRating>(value.value())?;
-                rating.normalize_ladder();
-                if account.kind == AccountKind::Human || rating.queue == "Ranked1v1" {
-                    ratings.push(rating);
-                }
+        for item in table.range(prefix.as_str()..upper.as_str())? {
+            let (_, value) = item?;
+            let mut rating = serde_json::from_slice::<SeasonRating>(value.value())?;
+            rating.normalize_ladder();
+            if account.kind == AccountKind::Human
+                || matches!(rating.queue.as_str(), "Ranked1v1" | "RankedFFA")
+            {
+                ratings.push(rating);
             }
         }
         drop(table);
@@ -1991,6 +2028,17 @@ impl PlayerDb {
                 && rating.mode == "FFA"
         }) {
             ratings.push(self.ranked_rating(&account.id).await?);
+        }
+        if !ratings.iter().any(|rating| {
+            rating.season_id == crate::profile::CURRENT_SEASON_ID
+                && rating.queue == "RankedFFA"
+                && rating.mode == "FFA"
+        }) {
+            ratings.push(crate::profile::initial_ranked_ffa_rating(
+                account.id.clone(),
+                1000.0,
+                0,
+            ));
         }
         ratings.sort_by(|left, right| {
             right
@@ -2023,68 +2071,72 @@ impl PlayerDb {
         ))
     }
 
+    /// Read the pre-sorted ranked leaderboard snapshot directly from Redb's
+    /// `RANKED_LEADERBOARD_TABLE` without scanning all ratings or hydrating accounts.
+    pub fn public_ranked_leaderboard_snapshot(
+        &self,
+        season_id: u32,
+        queue: &str,
+        mode: &str,
+    ) -> Result<Vec<PublicLeaderboardEntry>, Box<dyn std::error::Error + Send + Sync>> {
+        let Some(db) = &self.redb_db else {
+            return Ok(Vec::new());
+        };
+        let prefix = format!("{season_id:08}:{queue}:{mode}:");
+        let upper = format!("{prefix}\u{10ffff}");
+        let read_txn = db.begin_read()?;
+        let table = read_txn.open_table(RANKED_LEADERBOARD_TABLE)?;
+        let mut entries = Vec::new();
+        for (index, item) in table.range(prefix.as_str()..upper.as_str())?.enumerate() {
+            let (_, value) = item?;
+            let mut entry: PublicLeaderboardEntry = serde_json::from_slice(value.value())?;
+            entry.rank = (index + 1).min(u32::MAX as usize) as u32;
+            entry.is_bot = false;
+            if entry.win_rate == 0.0 && entry.games_played > 0 && entry.wins > 0 {
+                entry.win_rate = win_rate(entry.wins, entry.games_played);
+            }
+            entries.push(entry);
+        }
+        Ok(entries)
+    }
+
     pub async fn public_leaderboard(
         &self,
         queue: &str,
         mode: &str,
         limit: usize,
     ) -> Result<Vec<PublicLeaderboardEntry>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut entries = self.public_ranked_leaderboard_snapshot(
+            crate::profile::CURRENT_SEASON_ID,
+            queue,
+            mode,
+        )?;
+        entries.truncate(limit);
+        Ok(entries)
+    }
+
+    /// Read the full verified-victory leaderboard snapshot from Redb for in-memory
+    /// filtering/sorting and cached pagination.
+    pub fn public_victory_leaderboard_snapshot(
+        &self,
+    ) -> Result<Vec<crate::profile::PublicVictoryLeaderboardEntry>, Box<dyn std::error::Error + Send + Sync>> {
         let Some(db) = &self.redb_db else {
             return Ok(Vec::new());
         };
         let read_txn = db.begin_read()?;
-        let table = read_txn.open_table(SEASON_RATINGS_TABLE)?;
-        let mut ratings = Vec::new();
-        let marker = format!(":{}:{}:", crate::profile::CURRENT_SEASON_ID, queue);
-        for item in table.iter()? {
-            let (key, value) = item?;
-            let key = key.value();
-            if key.contains(&marker) && key.ends_with(&format!(":{mode}")) {
-                let mut rating = serde_json::from_slice::<SeasonRating>(value.value())?;
-                rating.normalize_ladder();
-                ratings.push(rating);
-            }
-        }
-        drop(table);
-        drop(read_txn);
+        let table = read_txn.open_table(VERIFIED_VICTORY_BOARD_TABLE)?;
         let mut entries = Vec::new();
-        for rating in ratings {
-            let Ok(account) = self.load_account(&rating.account_id).await else {
-                continue;
-            };
-            if account.kind == AccountKind::Bot
-                && (queue != "Ranked1v1" || account.profile.ranked_bot.is_none())
-            {
-                continue;
+        for (index, item) in table.iter()?.enumerate() {
+            let (_, value) = item?;
+            let mut entry: crate::profile::PublicVictoryLeaderboardEntry =
+                serde_json::from_slice(value.value())?;
+            entry.rank = (index + 1).min(u32::MAX as usize) as u32;
+            if entry.win_rate == 0.0 && entry.matches_played > 0 && entry.wins > 0 {
+                entry.win_rate = win_rate(entry.wins, entry.matches_played);
             }
-            entries.push((
-                rating,
-                account.id,
-                account.display_name,
-                account.kind == AccountKind::Bot,
-            ));
+            entries.push(entry);
         }
-        entries.sort_by_key(|left| std::cmp::Reverse(left.0.score));
-        Ok(entries
-            .into_iter()
-            .take(limit)
-            .enumerate()
-            .map(
-                |(index, (rating, account_id, display_name, is_bot))| PublicLeaderboardEntry {
-                    rank: index as u32 + 1,
-                    account_id: account_id.clone(),
-                    handle: public_handle(&display_name, &account_id),
-                    is_bot,
-                    queue: rating.queue,
-                    mode: rating.mode,
-                    score: rating.score,
-                    tier: rating.tier,
-                    division: rating.division,
-                    games_played: rating.games_played,
-                    wins: rating.wins,
-                },
-            )
-            .collect())
+        Ok(entries)
     }
 
     /// Cross-platform victories board sourced from the canonical account
@@ -2189,9 +2241,8 @@ impl PlayerDb {
         });
         let tips_on = !account.profile.menu_tips_disabled;
         let tactics_done = crate::campaign::tactics_completed(&account.profile.completed_episodes);
-        let enroll_welcome = tips_on
-            && welcome_saved.is_none()
-            && account.profile.matches_played == 0;
+        let enroll_welcome =
+            tips_on && welcome_saved.is_none() && account.profile.matches_played == 0;
         let enroll_post_match = tips_on
             && account.profile.matches_played >= 1
             && !account
@@ -2231,100 +2282,110 @@ impl PlayerDb {
                 &account.id,
                 &["tutorial", crate::commerce::WELCOME_GRANT_ID],
                 |account| {
-                ops.clear();
-                let mut mutated = false;
-                if let Some(guide) = account.profile.menu_guides.get_mut("welcome") {
-                    let normalized = crate::profile::normalize_welcome_guide_progress(
-                        guide,
-                        account.profile.matches_played,
-                    );
-                    if *guide != normalized {
-                        *guide = normalized;
+                    ops.clear();
+                    let mut mutated = false;
+                    if let Some(guide) = account.profile.menu_guides.get_mut("welcome") {
+                        let normalized = crate::profile::normalize_welcome_guide_progress(
+                            guide,
+                            account.profile.matches_played,
+                        );
+                        if *guide != normalized {
+                            *guide = normalized;
+                            mutated = true;
+                        }
+                    } else if !account.profile.menu_tips_disabled
+                        && account.profile.matches_played == 0
+                    {
+                        account
+                            .profile
+                            .menu_guides
+                            .insert("welcome".to_string(), MenuGuideProgress::default());
                         mutated = true;
                     }
-                } else if !account.profile.menu_tips_disabled
-                    && account.profile.matches_played == 0
-                {
-                    account
-                        .profile
-                        .menu_guides
-                        .insert("welcome".to_string(), MenuGuideProgress::default());
-                    mutated = true;
-                }
 
-                if !account.profile.menu_tips_disabled {
+                    if !account.profile.menu_tips_disabled {
+                        let tactics_done =
+                            crate::campaign::tactics_completed(&account.profile.completed_episodes);
+                        if account.profile.matches_played >= 1
+                            && !account
+                                .profile
+                                .menu_guides
+                                .contains_key("post_match_missions")
+                        {
+                            account.profile.menu_guides.insert(
+                                "post_match_missions".to_string(),
+                                crate::profile::default_guide_progress_for_id(
+                                    "post_match_missions",
+                                ),
+                            );
+                            mutated = true;
+                        }
+                        if tactics_done
+                            && !account.profile.menu_guides.contains_key("daily_ops_unlock")
+                        {
+                            account.profile.menu_guides.insert(
+                                "daily_ops_unlock".to_string(),
+                                crate::profile::default_guide_progress_for_id("daily_ops_unlock"),
+                            );
+                            mutated = true;
+                        }
+                        if tactics_done
+                            && account.profile.ranked_matches == 0
+                            && !account
+                                .profile
+                                .menu_guides
+                                .contains_key("weekly_ranked_unlock")
+                        {
+                            account.profile.menu_guides.insert(
+                                "weekly_ranked_unlock".to_string(),
+                                crate::profile::default_guide_progress_for_id(
+                                    "weekly_ranked_unlock",
+                                ),
+                            );
+                            mutated = true;
+                        }
+                    }
+
+                    let playability = crate::missions::PlayabilityContext {
+                        owned_leaders: &account.profile.owned_leaders,
+                        free_rotation: &free_rotation,
+                        crowns: account.profile.crowns,
+                        gems: account.profile.gems,
+                    };
                     let tactics_done =
                         crate::campaign::tactics_completed(&account.profile.completed_episodes);
-                    if account.profile.matches_played >= 1
-                        && !account
-                            .profile
-                            .menu_guides
-                            .contains_key("post_match_missions")
-                    {
-                        account.profile.menu_guides.insert(
-                            "post_match_missions".to_string(),
-                            crate::profile::default_guide_progress_for_id("post_match_missions"),
-                        );
+                    let newly_dealt = crate::missions::sync_hands_for_periods(
+                        crate::missions::HandSyncState {
+                            records: &mut account.profile.missions_progress,
+                            daily_day: &mut account.profile.daily_missions_day,
+                            daily_mission_ids: &mut account.profile.daily_mission_ids,
+                            daily_swaps_used: &mut account.profile.daily_swaps_used,
+                            daily_swapped_out_ids: &mut account.profile.daily_swapped_out_ids,
+                            weekly_period: &mut account.profile.weekly_missions_period,
+                            weekly_mission_ids: &mut account.profile.weekly_mission_ids,
+                            weekly_swaps_used: &mut account.profile.weekly_swaps_used,
+                            weekly_swapped_out_ids: &mut account.profile.weekly_swapped_out_ids,
+                        },
+                        epoch_day,
+                        rotation_period,
+                        tactics_done,
+                        deal_salt,
+                        Some(&playability),
+                    );
+                    for def in newly_dealt {
+                        ops.push(format!(
+                            "offered|{}|{}:{}",
+                            def.id,
+                            def.axis.as_str(),
+                            def.tag
+                        ));
                         mutated = true;
                     }
-                    if tactics_done
-                        && !account.profile.menu_guides.contains_key("daily_ops_unlock")
-                    {
-                        account.profile.menu_guides.insert(
-                            "daily_ops_unlock".to_string(),
-                            crate::profile::default_guide_progress_for_id("daily_ops_unlock"),
-                        );
-                        mutated = true;
+                    if mutated {
+                        account.updated_at = now;
                     }
-                    if tactics_done
-                        && account.profile.ranked_matches == 0
-                        && !account
-                            .profile
-                            .menu_guides
-                            .contains_key("weekly_ranked_unlock")
-                    {
-                        account.profile.menu_guides.insert(
-                            "weekly_ranked_unlock".to_string(),
-                            crate::profile::default_guide_progress_for_id("weekly_ranked_unlock"),
-                        );
-                        mutated = true;
-                    }
-                }
-
-                let playability = crate::missions::PlayabilityContext {
-                    owned_leaders: &account.profile.owned_leaders,
-                    free_rotation: &free_rotation,
-                    crowns: account.profile.crowns,
-                    gems: account.profile.gems,
-                };
-                let tactics_done =
-                    crate::campaign::tactics_completed(&account.profile.completed_episodes);
-                let newly_dealt = crate::missions::sync_hands_for_periods(
-                    crate::missions::HandSyncState {
-                        records: &mut account.profile.missions_progress,
-                        daily_day: &mut account.profile.daily_missions_day,
-                        daily_mission_ids: &mut account.profile.daily_mission_ids,
-                        daily_swaps_used: &mut account.profile.daily_swaps_used,
-                        daily_swapped_out_ids: &mut account.profile.daily_swapped_out_ids,
-                        weekly_period: &mut account.profile.weekly_missions_period,
-                        weekly_mission_ids: &mut account.profile.weekly_mission_ids,
-                        weekly_swaps_used: &mut account.profile.weekly_swaps_used,
-                        weekly_swapped_out_ids: &mut account.profile.weekly_swapped_out_ids,
-                    },
-                    epoch_day,
-                    rotation_period,
-                    tactics_done,
-                    deal_salt,
-                    Some(&playability),
-                );
-                for def in newly_dealt {
-                    ops.push(format!("offered|{}|{}:{}", def.id, def.axis.as_str(), def.tag));
-                    mutated = true;
-                }
-                if mutated {
-                    account.updated_at = now;
-                }
-            })
+                },
+            )
             .await?;
         self.record_mission_ops(&ops).await;
         Ok(account)
@@ -2347,7 +2408,8 @@ impl PlayerDb {
         progress: MenuGuideProgress,
         menu_tips_disabled: Option<bool>,
     ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
-        let is_global_toggle = guide_id == "hide_all" || (guide_id == "settings" && menu_tips_disabled.is_some());
+        let is_global_toggle =
+            guide_id == "hide_all" || (guide_id == "settings" && menu_tips_disabled.is_some());
         if !is_global_toggle {
             crate::profile::validate_menu_guide_progress(guide_id, &progress)?;
         }
@@ -2389,9 +2451,8 @@ impl PlayerDb {
                     return;
                 }
                 let was_terminal = saved.is_some_and(|s| s.status.is_terminal());
-                let merged = crate::profile::merge_menu_guide_progress_for_id(
-                    guide_id, saved, &progress,
-                );
+                let merged =
+                    crate::profile::merge_menu_guide_progress_for_id(guide_id, saved, &progress);
                 let merged = crate::profile::normalize_guide_progress_for_id(
                     guide_id,
                     &merged,
@@ -2760,8 +2821,23 @@ impl PlayerDb {
                 }
                 {
                     let mut table = write_txn.open_table(SEASON_RATINGS_TABLE)?;
+                    let mut lb_table = write_txn.open_table(RANKED_LEADERBOARD_TABLE)?;
                     for key in &rating_rows {
-                        if table.remove(key.as_str())?.is_some() {
+                        if let Some(removed) = table.remove(key.as_str())? {
+                            if let Ok(mut rating) =
+                                serde_json::from_slice::<SeasonRating>(removed.value())
+                            {
+                                rating.normalize_ladder();
+                                let lb_key = ranked_leaderboard_key(
+                                    rating.season_id,
+                                    &rating.queue,
+                                    &rating.mode,
+                                    rating.score,
+                                    rating.wins,
+                                    &rating.account_id,
+                                );
+                                lb_table.remove(lb_key.as_str())?;
+                            }
                             redb_rows_removed = redb_rows_removed.saturating_add(1);
                         }
                     }
@@ -2775,6 +2851,7 @@ impl PlayerDb {
                     }
                 }
                 write_txn.commit()?;
+                self.bump_leaderboard_epoch();
             }
         } else {
             redb_rows_removed =
@@ -3185,11 +3262,15 @@ impl PlayerDb {
         external_id: &str,
         linking_account: Option<&str>,
     ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
-        self.resolve_verified_identities(&[LinkedIdentity {
-            provider: provider.to_owned(),
-            environment: environment.to_owned(),
-            external_id: external_id.to_owned(),
-        }], linking_account).await
+        self.resolve_verified_identities(
+            &[LinkedIdentity {
+                provider: provider.to_owned(),
+                environment: environment.to_owned(),
+                external_id: external_id.to_owned(),
+            }],
+            linking_account,
+        )
+        .await
     }
 
     /// Load an existing provider account without creating a new one, scoped
@@ -3339,6 +3420,20 @@ impl PlayerDb {
         environment: String,
         external_id: String,
     ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
+        self.get_or_create_bot_account_named(environment, external_id, None)
+            .await
+    }
+
+    async fn get_or_create_bot_account_named(
+        &self,
+        environment: String,
+        external_id: String,
+        display_name: Option<String>,
+    ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
+        let display_name = display_name
+            .map(|name| normalize_display_name(&name))
+            .transpose()
+            .map_err(str::to_string)?;
         if let Some(id) = self
             .identity_account(&environment, "bot", &external_id)
             .await?
@@ -3347,7 +3442,10 @@ impl PlayerDb {
             if account.kind != AccountKind::Bot {
                 return Err("bot identity belongs to a human account".into());
             }
-            return self.ensure_starting_leader(account).await;
+            let account = self.ensure_starting_leader(account).await?;
+            return self
+                .set_bot_display_name_if_needed(account, display_name.as_deref())
+                .await;
         }
         loop {
             let id = format!("{:032x}", rand::random::<u128>());
@@ -3359,7 +3457,7 @@ impl PlayerDb {
                 .insert_account(PlayerAccount {
                     profile: PlayerProfile::default(),
                     id,
-                    display_name: generated_display_name(),
+                    display_name: display_name.clone().unwrap_or_else(generated_display_name),
                     linked_identities: vec![LinkedIdentity {
                         provider: "bot".into(),
                         environment: environment.clone(),
@@ -3384,12 +3482,32 @@ impl PlayerDb {
                         if account.kind != AccountKind::Bot {
                             return Err("bot identity belongs to a human account".into());
                         }
-                        return self.ensure_starting_leader(account).await;
+                        let account = self.ensure_starting_leader(account).await?;
+                        return self
+                            .set_bot_display_name_if_needed(account, display_name.as_deref())
+                            .await;
                     }
                     return Err(error);
                 }
             }
         }
+    }
+
+    async fn set_bot_display_name_if_needed(
+        &self,
+        account: PlayerAccount,
+        display_name: Option<&str>,
+    ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
+        let Some(display_name) = display_name.filter(|name| account.display_name != *name) else {
+            return Ok(account);
+        };
+        let display_name = display_name.to_string();
+        self.update_account_atomic(&account.id, &[], |account| {
+            if account.kind == AccountKind::Bot && account.display_name != display_name {
+                account.display_name = display_name.clone();
+            }
+        })
+        .await
     }
 
     /// Load or create an anonymous account using the canonical account ID.
@@ -4033,7 +4151,8 @@ impl PlayerDb {
                         account.profile.crowns -= cost;
                     }
                     account.profile.owned_leaders.insert(leader_id.clone());
-                    account.profile
+                    account
+                        .profile
                         .refresh_achievements_for_purchase(&format!("purchase:{purchase_id}"), now);
                     account.profile.purchase_history.insert(
                         purchase_id.clone(),
@@ -4103,7 +4222,8 @@ impl PlayerDb {
                 } else {
                     *balance -= cost;
                     account.profile.owned_skins.insert(skin.id.clone());
-                    account.profile
+                    account
+                        .profile
                         .refresh_achievements_for_purchase(&format!("purchase:{purchase_id}"), now);
                     account.profile.purchase_history.insert(
                         purchase_id.clone(),
@@ -4181,7 +4301,8 @@ impl PlayerDb {
                         account.profile.owned_skins.insert(id.clone());
                     }
                 }
-                account.profile
+                account
+                    .profile
                     .refresh_achievements_for_purchase(&format!("purchase:{purchase_id}"), now);
                 account.profile.purchase_history.insert(
                     purchase_id.clone(),
@@ -4336,16 +4457,24 @@ impl PlayerDb {
     /// the `sow:bot:pool` SET as an index of all bot account_ids for
     /// analytics / debugging.
     ///
-    /// Bot display names remain server-managed; the account record still has a
-    /// canonical display_name field for schema consistency.
+    /// `display_names` are the stable public names paired with runtime-pool
+    /// IDs, so profiles and match history show the same identity as the lobby.
     pub async fn seed_bot_pool(
         &self,
         external_ids: Vec<String>,
+        display_names: Vec<String>,
     ) -> Result<Vec<String>, Box<dyn std::error::Error + Send + Sync>> {
+        if external_ids.len() != display_names.len() {
+            return Err("bot pool identity and display-name counts differ".into());
+        }
         let mut account_ids = Vec::with_capacity(external_ids.len());
-        for external_id in external_ids {
+        for (external_id, display_name) in external_ids.into_iter().zip(display_names) {
             let account = self
-                .get_or_create_bot_account("production".into(), external_id)
+                .get_or_create_bot_account_named(
+                    "production".into(),
+                    external_id,
+                    Some(display_name),
+                )
                 .await?;
             account_ids.push(account.id);
         }
@@ -4503,74 +4632,92 @@ impl PlayerDb {
                     if account.kind != AccountKind::Bot {
                         return Err("ranked bot account is not a bot".into());
                     }
-                    let bot = account
-                        .profile
-                        .ranked_bot
-                        .as_mut()
-                        .ok_or("account is not a ranked bot")?;
-                    let (field, old_value, new_value) = match update {
-                        RankedBotManualUpdate::SetPaused { paused, .. } => {
-                            let old = bot.paused.to_string();
-                            bot.paused = paused;
-                            ("paused", old, paused.to_string())
-                        }
-                        RankedBotManualUpdate::SetIq { iq, .. } => {
-                            if !(60..=180).contains(&iq) || iq % 20 != 0 {
-                                return Err(
-                                    "ranked bot IQ must be 60 through 180 in steps of 20".into()
-                                );
+                    let mut pending_lb_sync: Option<(Option<(u16, u32)>, SeasonRating)> = None;
+                    let (field, old_value, new_value) = {
+                        let bot = account
+                            .profile
+                            .ranked_bot
+                            .as_mut()
+                            .ok_or("account is not a ranked bot")?;
+                        let (field, old_value, new_value) = match update {
+                            RankedBotManualUpdate::SetPaused { paused, .. } => {
+                                let old = bot.paused.to_string();
+                                bot.paused = paused;
+                                ("paused", old, paused.to_string())
                             }
-                            let old = bot.iq.to_string();
-                            bot.iq = iq;
-                            ("iq", old, iq.to_string())
-                        }
-                        RankedBotManualUpdate::SetRating { score, .. } => {
-                            if score > crate::profile::RANKED_MAX_SCORE {
-                                return Err("ranked bot rating must be between 0 and 10000".into());
-                            }
-                            let key = format!(
-                                "rating:{}:{}:Ranked1v1:FFA",
-                                account_id,
-                                crate::profile::CURRENT_SEASON_ID
-                            );
-                            let mut ratings = txn.open_table(SEASON_RATINGS_TABLE)?;
-                            let mut rating = match ratings.get(key.as_str())? {
-                                Some(value) => {
-                                    let mut r =
-                                        serde_json::from_slice::<SeasonRating>(value.value())?;
-                                    r.normalize_ladder();
-                                    r
+                            RankedBotManualUpdate::SetIq { iq, .. } => {
+                                if !(60..=180).contains(&iq) || iq % 20 != 0 {
+                                    return Err(
+                                        "ranked bot IQ must be 60 through 180 in steps of 20"
+                                            .into(),
+                                    );
                                 }
-                                None => crate::profile::initial_ranked_rating(
-                                    account_id.clone(),
-                                    1000.0 + f64::from(bot.iq.saturating_sub(60)) * 20.0,
-                                    now,
-                                ),
-                            };
-                            let old = rating.score.to_string();
-                            rating.mu = f64::from(score);
-                            rating.score = score;
-                            let (tier, division) = crate::profile::tier_for_score(score);
-                            rating.tier = tier.to_string();
-                            rating.division = division;
-                            rating.peak_score = rating.peak_score.max(score);
-                            rating.updated_at = now;
-                            let encoded = serde_json::to_vec(&rating)?;
-                            ratings.insert(key.as_str(), encoded.as_slice())?;
-                            ("rating", old, score.to_string())
+                                let old = bot.iq.to_string();
+                                bot.iq = iq;
+                                ("iq", old, iq.to_string())
+                            }
+                            RankedBotManualUpdate::SetRating { score, .. } => {
+                                if score > crate::profile::RANKED_MAX_SCORE {
+                                    return Err(
+                                        "ranked bot rating must be between 0 and 10000".into()
+                                    );
+                                }
+                                let key = format!(
+                                    "rating:{}:{}:Ranked1v1:FFA",
+                                    account_id,
+                                    crate::profile::CURRENT_SEASON_ID
+                                );
+                                let mut ratings = txn.open_table(SEASON_RATINGS_TABLE)?;
+                                let existing = ratings.get(key.as_str())?.map(|v| {
+                                    let mut r = serde_json::from_slice::<SeasonRating>(v.value())?;
+                                    r.normalize_ladder();
+                                    Ok::<_, Box<dyn std::error::Error + Send + Sync>>(r)
+                                });
+                                let (previous, mut rating) = match existing.transpose()? {
+                                    Some(r) => (Some((r.score, r.wins)), r),
+                                    None => (
+                                        None,
+                                        crate::profile::initial_ranked_rating(
+                                            account_id.clone(),
+                                            1000.0 + f64::from(bot.iq.saturating_sub(60)) * 20.0,
+                                            now,
+                                        ),
+                                    ),
+                                };
+                                let old_score = rating.score;
+                                rating.mu = f64::from(score);
+                                rating.score = score;
+                                let (tier, division) = crate::profile::tier_for_score(score);
+                                rating.tier = tier.to_string();
+                                rating.division = division;
+                                rating.peak_score = rating.peak_score.max(score);
+                                rating.updated_at = now;
+                                let encoded = serde_json::to_vec(&rating)?;
+                                ratings.insert(key.as_str(), encoded.as_slice())?;
+                                pending_lb_sync = Some((previous, rating));
+                                ("rating", old_score.to_string(), score.to_string())
+                            }
+                        };
+                        if old_value != new_value {
+                            bot.manual_changes.push(RankedBotChange {
+                                changed_at: now,
+                                actor: actor.trim().to_string(),
+                                field: field.to_string(),
+                                old_value: old_value.clone(),
+                                new_value: new_value.clone(),
+                            });
                         }
+                        (field, old_value, new_value)
                     };
-                    let changes = &mut bot.manual_changes;
                     if old_value != new_value {
-                        changes.push(RankedBotChange {
-                            changed_at: now,
-                            actor: actor.trim().to_string(),
-                            field: field.to_string(),
-                            old_value,
-                            new_value,
-                        });
                         account.updated_at = now;
                     }
+                    if let Some((previous, rating)) = pending_lb_sync {
+                        account_store::upsert_ranked_leaderboard_entry(
+                            txn, previous, &rating, account,
+                        )?;
+                    }
+                    let _ = field;
                     Ok(())
                 },
             )
@@ -5017,9 +5164,8 @@ impl PlayerDb {
                         | crate::missions::MissionCategory::Weekly
                 ) && !tactics_completed
                 {
-                    failure = Some(
-                        "complete Tactics to unlock daily and weekly missions".to_string(),
-                    );
+                    failure =
+                        Some("complete Tactics to unlock daily and weekly missions".to_string());
                     return;
                 }
 
@@ -5066,8 +5212,9 @@ impl PlayerDb {
                                     .unwrap_or(false)
                             });
                         if prev_unclaimed {
-                            failure =
-                                Some("previous onboarding mission must be claimed first".to_string());
+                            failure = Some(
+                                "previous onboarding mission must be claimed first".to_string(),
+                            );
                             return;
                         }
                     }
@@ -5203,9 +5350,8 @@ impl PlayerDb {
                 let tactics_completed =
                     crate::campaign::tactics_completed(&account.profile.completed_episodes);
                 if !tactics_completed {
-                    failure = Some(
-                        "complete Tactics to unlock daily and weekly missions".to_string(),
-                    );
+                    failure =
+                        Some("complete Tactics to unlock daily and weekly missions".to_string());
                     return;
                 }
 
@@ -5767,7 +5913,9 @@ impl PlayerDb {
         &self,
         release_id: &str,
     ) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
-        use crate::profile::{MatchExitState, MatchStartRecord, MatchWorkRecord, ReplayVerificationStatus};
+        use crate::profile::{
+            MatchExitState, MatchStartRecord, MatchWorkRecord, ReplayVerificationStatus,
+        };
         let db = self.redb_db.as_ref().ok_or("Redb database unavailable")?;
         let txn = db.begin_read()?;
         let starts = txn.open_table(MATCH_STARTS_TABLE)?;
@@ -5775,7 +5923,10 @@ impl PlayerDb {
         for entry in starts.iter()? {
             let (key, value) = entry?;
             let start: MatchStartRecord = serde_json::from_slice(value.value())?;
-            if start.metadata.get("server_release_id").and_then(serde_json::Value::as_str)
+            if start
+                .metadata
+                .get("server_release_id")
+                .and_then(serde_json::Value::as_str)
                 == Some(release_id)
                 && start.replay_status == ReplayVerificationStatus::Pending
             {
@@ -5788,9 +5939,15 @@ impl PlayerDb {
             let job: MatchWorkRecord = serde_json::from_slice(value.value())?;
             if job.state != MatchExitState::Confirmed {
                 let match_id = job.work.match_id();
-                let start: Option<MatchStartRecord> = starts.get(match_id)?.map(|v| serde_json::from_slice(v.value())).transpose()?;
+                let start: Option<MatchStartRecord> = starts
+                    .get(match_id)?
+                    .map(|v| serde_json::from_slice(v.value()))
+                    .transpose()?;
                 if start.is_some_and(|record| {
-                    record.metadata.get("server_release_id").and_then(serde_json::Value::as_str)
+                    record
+                        .metadata
+                        .get("server_release_id")
+                        .and_then(serde_json::Value::as_str)
                         == Some(release_id)
                 }) {
                     outstanding.insert(match_id.to_owned());
@@ -6104,7 +6261,7 @@ impl PlayerDb {
                             participant,
                             None,
                         );
-                        if record.queue == "Ranked1v1" {
+                        if matches!(record.queue.as_str(), "Ranked1v1" | "RankedFFA") {
                             apply_ranked_bot_stats_to_account(account, participant, now);
                         }
                         include.push(
@@ -6135,6 +6292,15 @@ impl PlayerDb {
                     record.winning_team = result_for_write.winning_team.clone();
                     if record.queue == "Ranked1v1" && !record.rating_eligible {
                         settle_ranked_ratings(txn, &mut record, &result_for_write, accounts, now)?;
+                    }
+                    if record.queue == "RankedFFA" && !record.rating_eligible {
+                        settle_ranked_ffa_ratings(
+                            txn,
+                            &mut record,
+                            &result_for_write,
+                            accounts,
+                            now,
+                        )?;
                     }
                     if record.queue == "Ranked1v1" && record.rating_eligible {
                         for account in accounts.iter_mut() {
@@ -6373,6 +6539,54 @@ fn validate_verified_match_result(
     {
         return Err("invalid verified result: roster is incomplete".to_string());
     }
+    if start
+        .metadata
+        .get("kind")
+        .and_then(serde_json::Value::as_str)
+        == Some("RankedFFA")
+    {
+        if result.personal_closure_turn.is_some() {
+            if result
+                .participants
+                .iter()
+                .any(|participant| participant.placement != 0)
+            {
+                return Err("invalid ranked FFA closure placement".to_string());
+            }
+        } else {
+            if result.participants.len() < crate::MIN_RANKED_FFA_PARTICIPANTS
+                || result.total_contenders as usize != result.participants.len()
+                || result.winning_team.is_some()
+            {
+                return Err("invalid ranked FFA roster size".to_string());
+            }
+            if result.winner_player_id.is_some_and(|winner| {
+                result
+                    .participants
+                    .iter()
+                    .find(|participant| participant.player_id == winner)
+                    .is_none_or(|participant| participant.placement != 1 || !participant.won)
+            }) {
+                return Err("invalid ranked FFA winner placement".to_string());
+            }
+            let mut places = std::collections::BTreeMap::<u16, usize>::new();
+            for participant in &result.participants {
+                if participant.placement == 0
+                    || usize::from(participant.placement) > result.participants.len()
+                {
+                    return Err("invalid ranked FFA placement".to_string());
+                }
+                *places.entry(participant.placement).or_default() += 1;
+            }
+            let mut next_place = 1_usize;
+            for (place, count) in places {
+                if usize::from(place) != next_place {
+                    return Err("invalid ranked FFA placement order".to_string());
+                }
+                next_place += count;
+            }
+        }
+    }
     Ok(())
 }
 
@@ -6427,75 +6641,189 @@ fn settle_ranked_ratings(
     {
         return Err("invalid verified ranked result".into());
     }
-    let mut table = txn.open_table(SEASON_RATINGS_TABLE)?;
     let mut ratings = Vec::with_capacity(2);
     let mut keys = Vec::with_capacity(2);
-    for (participant, account) in result.participants.iter().zip(accounts) {
-        if participant.account_id != account.id {
-            return Err("ranked participant account mismatch".into());
-        }
-        let key = format!("rating:{}:{}:Ranked1v1:FFA", account.id, record.season_id);
-        let rating = match table.get(key.as_str())? {
-            Some(value) => {
-                let mut r = serde_json::from_slice::<SeasonRating>(value.value())?;
-                r.normalize_ladder();
-                r
+    let mut previous_keys: Vec<Option<(u16, u32)>> = Vec::with_capacity(2);
+    {
+        let table = txn.open_table(SEASON_RATINGS_TABLE)?;
+        for (participant, account) in result.participants.iter().zip(accounts) {
+            if participant.account_id != account.id {
+                return Err("ranked participant account mismatch".into());
             }
-            None => {
-                let initial = match account.kind {
-                    AccountKind::Bot => {
-                        let bot = account
-                            .profile
-                            .ranked_bot
-                            .as_ref()
-                            .ok_or("ranked bot profile missing")?;
-                        1000.0 + f64::from(bot.iq.saturating_sub(60)) * 20.0
-                    }
-                    AccountKind::Human => 1000.0,
-                };
-                crate::profile::initial_ranked_rating(account.id.clone(), initial, now)
+            let key = format!("rating:{}:{}:Ranked1v1:FFA", account.id, record.season_id);
+            let (previous, rating) = match table.get(key.as_str())? {
+                Some(value) => {
+                    let mut r = serde_json::from_slice::<SeasonRating>(value.value())?;
+                    r.normalize_ladder();
+                    (Some((r.score, r.wins)), r)
+                }
+                None => {
+                    let initial = match account.kind {
+                        AccountKind::Bot => {
+                            let bot = account
+                                .profile
+                                .ranked_bot
+                                .as_ref()
+                                .ok_or("ranked bot profile missing")?;
+                            1000.0 + f64::from(bot.iq.saturating_sub(60)) * 20.0
+                        }
+                        AccountKind::Human => 1000.0,
+                    };
+                    (
+                        None,
+                        crate::profile::initial_ranked_rating(account.id.clone(), initial, now),
+                    )
+                }
+            };
+            if rating.account_id != account.id
+                || rating.season_id != record.season_id
+                || rating.schema_version != 2
+            {
+                return Err("ranked rating identity mismatch".into());
             }
-        };
-        if rating.account_id != account.id
-            || rating.season_id != record.season_id
-            || rating.schema_version != 2
-        {
-            return Err("ranked rating identity mismatch".into());
+            previous_keys.push(previous);
+            keys.push(key);
+            ratings.push(rating);
         }
-        keys.push(key);
-        ratings.push(rating);
     }
     let before = ratings.clone();
+    {
+        let mut table = txn.open_table(SEASON_RATINGS_TABLE)?;
+        for i in 0..2 {
+            let player = &result.participants[i];
+            let outcome = match result.winner_player_id {
+                Some(winner) if winner == player.player_id => 1.0,
+                Some(_) => 0.0,
+                None => 0.5,
+            };
+            let points_breakdown =
+                crate::profile::ranked_points_breakdown(&before[i], &before[1 - i], outcome);
+            crate::profile::apply_ranked_result(&mut ratings[i], &before[1 - i], outcome, now)?;
+            let participant = record
+                .participants
+                .iter_mut()
+                .find(|p| p.account_id == player.account_id)
+                .ok_or("ranked history participant missing")?;
+            participant.rating_delta = Some(
+                (i32::from(ratings[i].score) - i32::from(before[i].score))
+                    .clamp(i16::MIN as i32, i16::MAX as i32) as i16,
+            );
+            participant.rating_before = Some(before[i].score);
+            participant.rating_after = Some(ratings[i].score);
+            participant.tier_before = Some(before[i].tier.clone());
+            participant.tier_after = Some(ratings[i].tier.clone());
+            participant.division_before = before[i].division.clone();
+            participant.division_after = ratings[i].division.clone();
+            participant.games_played_after = Some(ratings[i].games_played);
+            participant.placements_complete_after = Some(ratings[i].placements_complete);
+            participant.ranked_points_breakdown = Some(points_breakdown);
+            let encoded = serde_json::to_vec(&ratings[i])?;
+            table.insert(keys[i].as_str(), encoded.as_slice())?;
+        }
+    }
     for i in 0..2 {
-        let player = &result.participants[i];
-        let outcome = match result.winner_player_id {
-            Some(winner) if winner == player.player_id => 1.0,
-            Some(_) => 0.0,
-            None => 0.5,
-        };
-        let points_breakdown =
-            crate::profile::ranked_points_breakdown(&before[i], &before[1 - i], outcome);
-        crate::profile::apply_ranked_result(&mut ratings[i], &before[1 - i], outcome, now)?;
-        let participant = record
+        account_store::upsert_ranked_leaderboard_entry(
+            txn,
+            previous_keys[i],
+            &ratings[i],
+            &accounts[i],
+        )?;
+    }
+    record.rating_eligible = true;
+    Ok(())
+}
+
+fn settle_ranked_ffa_ratings(
+    txn: &WriteTransaction,
+    record: &mut MatchRecord,
+    result: &VerifiedMatchResult,
+    accounts: &[PlayerAccount],
+    now: u64,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    if record.mode != "FFA"
+        || result.participants.len() < crate::MIN_RANKED_FFA_PARTICIPANTS
+        || result.participants.len() != accounts.len()
+        || result.total_contenders as usize != result.participants.len()
+        || result.winning_team.is_some()
+        || result
+            .winner_player_id
+            .is_some_and(|winner| !result.participants.iter().any(|p| p.player_id == winner))
+        || result
             .participants
-            .iter_mut()
-            .find(|p| p.account_id == player.account_id)
-            .ok_or("ranked history participant missing")?;
-        participant.rating_delta = Some(
-            (i32::from(ratings[i].score) - i32::from(before[i].score))
-                .clamp(i16::MIN as i32, i16::MAX as i32) as i16,
-        );
-        participant.rating_before = Some(before[i].score);
-        participant.rating_after = Some(ratings[i].score);
-        participant.tier_before = Some(before[i].tier.clone());
-        participant.tier_after = Some(ratings[i].tier.clone());
-        participant.division_before = before[i].division.clone();
-        participant.division_after = ratings[i].division.clone();
-        participant.games_played_after = Some(ratings[i].games_played);
-        participant.placements_complete_after = Some(ratings[i].placements_complete);
-        participant.ranked_points_breakdown = Some(points_breakdown);
-        let encoded = serde_json::to_vec(&ratings[i])?;
-        table.insert(keys[i].as_str(), encoded.as_slice())?;
+            .iter()
+            .any(|participant| participant.placement == 0)
+    {
+        return Err("invalid verified ranked FFA result".into());
+    }
+    let total = result.participants.len().min(usize::from(u16::MAX)) as u16;
+    let mut updated_entries = Vec::with_capacity(accounts.len());
+    {
+        let mut table = txn.open_table(SEASON_RATINGS_TABLE)?;
+        for (participant, account) in result.participants.iter().zip(accounts) {
+            if participant.account_id != account.id {
+                return Err("ranked FFA participant account mismatch".into());
+            }
+            let key = format!("rating:{}:{}:RankedFFA:FFA", account.id, record.season_id);
+            let (previous, mut rating) = match table.get(key.as_str())? {
+                Some(value) => {
+                    let mut rating = serde_json::from_slice::<SeasonRating>(value.value())?;
+                    rating.normalize_ladder();
+                    (Some((rating.score, rating.wins)), rating)
+                }
+                None => (
+                    None,
+                    crate::profile::initial_ranked_ffa_rating(account.id.clone(), 1000.0, now),
+                ),
+            };
+            if rating.account_id != account.id
+                || rating.season_id != record.season_id
+                || rating.queue != "RankedFFA"
+                || rating.mode != "FFA"
+                || rating.schema_version != 2
+            {
+                return Err("ranked FFA rating identity mismatch".into());
+            }
+            let before = rating.score;
+            let tied = result
+                .participants
+                .iter()
+                .filter(|other| other.placement == participant.placement)
+                .count();
+            let points =
+                crate::profile::ranked_ffa_placement_delta(participant.placement, tied, total);
+            rating.score = (i32::from(before) + i32::from(points))
+                .clamp(0, i32::from(crate::profile::RANKED_MAX_SCORE)) as u16;
+            rating.mu = 1000.0 + f64::from(rating.score) / 3.0;
+            rating.games_played = rating.games_played.saturating_add(1);
+            rating.wins = rating.wins.saturating_add(u32::from(participant.won));
+            rating.win_streak = if participant.won {
+                rating.win_streak.saturating_add(1)
+            } else {
+                0
+            };
+            rating.updated_at = now;
+            rating.normalize_ladder();
+            let actual_delta = (i32::from(rating.score) - i32::from(before)) as i16;
+            let saved = record
+                .participants
+                .iter_mut()
+                .find(|saved| saved.account_id == participant.account_id)
+                .ok_or("ranked FFA history participant missing")?;
+            saved.rating_delta = Some(actual_delta);
+            saved.rating_before = Some(before);
+            saved.rating_after = Some(rating.score);
+            saved.tier_before = Some(crate::profile::tier_for_score(before).0.to_string());
+            saved.tier_after = Some(rating.tier.clone());
+            saved.division_before = crate::profile::tier_for_score(before).1;
+            saved.division_after = rating.division.clone();
+            saved.games_played_after = Some(rating.games_played);
+            saved.placements_complete_after = Some(rating.placements_complete);
+            table.insert(key.as_str(), serde_json::to_vec(&rating)?.as_slice())?;
+            updated_entries.push((previous, rating, account));
+        }
+    }
+    for (previous, rating, account) in updated_entries {
+        account_store::upsert_ranked_leaderboard_entry(txn, previous, &rating, account)?;
     }
     record.rating_eligible = true;
     Ok(())
@@ -6661,7 +6989,9 @@ fn update_match_record_participant(
     recorded.players_defeated = participant.players_defeated;
     recorded.empires_defeated = participant.empires_defeated;
     recorded.tribes_defeated = participant.tribes_defeated;
-    recorded.placement = if participant.won { 1 } else { 0 };
+    recorded.placement = participant
+        .placement
+        .max(if participant.won { 1 } else { 0 });
     recorded.xp = earned.xp;
     recorded.leader_xp = earned.leader_xp;
     recorded.crowns = earned.crowns;
@@ -6693,6 +7023,11 @@ fn match_record_has_participant_result(
         ..Default::default()
     });
     saved.personal_closure_turn == personal_closure_turn
+        && (record.queue != "RankedFFA"
+            || saved.placement
+                == participant
+                    .placement
+                    .max(if participant.won { 1 } else { 0 }))
         && saved.leader == participant.leader
         && saved.team == participant.team
         && saved.won == participant.won
@@ -6702,7 +7037,10 @@ fn match_record_has_participant_result(
         && saved.players_defeated == participant.players_defeated
         && saved.empires_defeated == participant.empires_defeated
         && saved.tribes_defeated == participant.tribes_defeated
-        && saved.placement == if participant.won { 1 } else { 0 }
+        && saved.placement
+            == participant
+                .placement
+                .max(if participant.won { 1 } else { 0 })
         && saved.xp == earned.xp
         && saved.leader_xp == earned.leader_xp
         && saved.crowns == earned.crowns
@@ -6776,7 +7114,7 @@ fn apply_ranked_bot_stats_to_account(
     participant: &crate::profile::VerifiedMatchParticipant,
     now: u64,
 ) {
-    if account.kind != AccountKind::Bot || account.profile.ranked_bot.is_none() {
+    if account.kind != AccountKind::Bot {
         return;
     }
     let leader = account.profile.record_match_stats_with_leader(
@@ -7189,7 +7527,6 @@ mod tests {
         AD_DOUBLE_RECEIPT_PREFIX, AD_DOUBLE_WINDOW_SECS, AD_DOUBLES_PER_DAY,
         double_match_reward_in_profile,
     };
-    use crate::profile::ReplayVerificationStatus;
     use super::{
         AccountKind, DISPLAY_NAME_MAX_CHARS, LeaderCareerStats, MatchRecord, PlayerAccount,
         PlayerDb, PlayerProfile, VerifiedReceiptDecision, generated_display_name,
@@ -7197,6 +7534,7 @@ mod tests {
         should_skip_full_match_participant, validate_lobby_match_id, verified_receipt_decision,
         verified_victory_key,
     };
+    use crate::profile::ReplayVerificationStatus;
 
     fn test_account(kind: AccountKind) -> PlayerAccount {
         PlayerAccount {
@@ -7458,8 +7796,8 @@ mod tests {
 
         db.apply_verified_match_result(&result, None).await.unwrap();
         let profile = db.public_profile(&bot.id).await.unwrap().unwrap();
-        assert!(profile.is_bot);
-        assert_eq!(profile.ranked_bot_iq, Some(60));
+        assert!(!profile.is_bot);
+        assert_eq!(profile.ranked_bot_iq, None);
         assert_eq!(profile.matches_played, 1);
         assert_eq!(profile.wins, 1);
         assert_eq!(profile.kills, 4);
@@ -7468,6 +7806,15 @@ mod tests {
         assert_eq!(profile.tribes_defeated, 3);
         assert_eq!(profile.recent_matches.len(), 1);
         assert_eq!(profile.recent_matches[0].queue, "Ranked1v1");
+        assert_eq!(profile.recent_matches[0].ranked_bot_iq, None);
+        let detail = db.public_match_detail("912345").unwrap().unwrap();
+        assert_eq!(detail.ranked_bot_iq, None);
+        assert!(
+            detail
+                .participants
+                .iter()
+                .all(|participant| !participant.is_bot)
+        );
         assert_eq!(
             db.public_match_history(&bot.id, 0, 20, None, None)
                 .await
@@ -7489,6 +7836,154 @@ mod tests {
         assert_eq!(saved_bot.profile.matches_played, 1);
         assert_eq!(saved_bot.profile.verified_wins, 1);
         assert_eq!(saved_bot.profile.kills, 4);
+    }
+
+    #[tokio::test]
+    async fn ranked_ffa_ghost_winner_has_a_public_profile_and_settles_once() {
+        use crate::profile::{
+            MatchStartRecord, ReplayVerificationStatus, VerifiedMatchParticipant,
+            VerifiedMatchResult,
+        };
+
+        let temp = tempfile::tempdir().unwrap();
+        let redb = std::sync::Arc::new(
+            crate::redb_store::init_database(temp.path().join("ranked-ffa-profiles.redb")).unwrap(),
+        );
+        let db = PlayerDb::new("redis://127.0.0.1:6379/0", None, Some(redb));
+        let mut accounts = Vec::new();
+        for index in 0..16 {
+            let kind = if index == 0 {
+                AccountKind::Human
+            } else {
+                AccountKind::Bot
+            };
+            let mut account = test_account(kind);
+            account.id = format!("{:032x}", index + 1);
+            account.display_name = format!("Public Player {:02}", index + 1);
+            db.insert_account_sync(account.clone()).unwrap();
+            accounts.push(account);
+        }
+
+        let match_id = "912347";
+        let start = MatchStartRecord {
+            match_id: match_id.into(),
+            player_ids: accounts.iter().map(|account| account.id.clone()).collect(),
+            metadata: serde_json::json!({
+                "kind": "RankedFFA",
+                "started_at": 100,
+                "config": {"game_mode": "FFA", "map_name": "world"},
+                "relay_players": accounts.iter().enumerate().map(|(index, account)| {
+                    serde_json::json!({
+                        "player_id": index + 1,
+                        "database_account_id": account.id,
+                        "is_internal": index != 0,
+                        "leader": "Caesar",
+                        "team": null
+                    })
+                }).collect::<Vec<_>>()
+            }),
+            replay_status: ReplayVerificationStatus::Pending,
+        };
+        db.save_match_start_record(start).unwrap();
+
+        let result = VerifiedMatchResult {
+            match_id: match_id.into(),
+            duration_seconds: 120,
+            winner_player_id: Some(16),
+            total_contenders: 16,
+            participants: accounts
+                .iter()
+                .enumerate()
+                .map(|(index, account)| {
+                    let won = index == 15;
+                    VerifiedMatchParticipant {
+                        player_id: (index + 1) as u16,
+                        account_id: account.id.clone(),
+                        placement: if won { 1 } else { (index + 2) as u16 },
+                        leader: Some("Caesar".into()),
+                        won,
+                        ..Default::default()
+                    }
+                })
+                .collect(),
+            ..Default::default()
+        };
+
+        db.apply_verified_match_result(&result, None).await.unwrap();
+        db.apply_verified_match_result(&result, None).await.unwrap();
+        let mut changed_result = result.clone();
+        changed_result.participants[0].placement = 3;
+        changed_result.participants[1].placement = 2;
+        assert!(
+            db.apply_verified_match_result(&changed_result, None)
+                .await
+                .is_err()
+        );
+
+        let winner_id = &accounts[15].id;
+        let profile = db.public_profile(winner_id).await.unwrap().unwrap();
+        assert_eq!(profile.display_name, "Public Player 16");
+        assert!(!profile.is_bot);
+        assert_eq!(profile.ranked_bot_iq, None);
+        assert_eq!(profile.matches_played, 1);
+        assert_eq!(profile.wins, 1);
+        let ffa_rating = profile
+            .ratings
+            .iter()
+            .find(|rating| rating.queue == "RankedFFA")
+            .unwrap();
+        assert_eq!(ffa_rating.score, 30);
+        assert_eq!(ffa_rating.games_played, 1);
+        let presentation = db
+            .ranked_match_result(winner_id, match_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(presentation.queue, "RankedFFA");
+        assert_eq!(presentation.placement, 1);
+        assert_eq!(presentation.total_contenders, 16);
+        assert_eq!(profile.recent_matches[0].placement, 1);
+        assert_eq!(profile.recent_matches[0].rating_delta, Some(30));
+
+        let history = db
+            .public_match_history(winner_id, 0, 20, Some("RankedFFA"), None)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].placement, 1);
+        let detail = db.public_match_detail(match_id).unwrap().unwrap();
+        assert_eq!(detail.queue, "RankedFFA");
+        assert_eq!(detail.participants.len(), 16);
+        assert!(
+            detail
+                .participants
+                .iter()
+                .all(|participant| !participant.is_bot)
+        );
+        assert_eq!(
+            detail.winner_account_id.as_deref(),
+            Some(winner_id.as_str())
+        );
+        assert_eq!(
+            detail
+                .participants
+                .iter()
+                .find(|participant| participant.account_id == *winner_id)
+                .unwrap()
+                .placement,
+            1
+        );
+
+        let leaderboard = db
+            .public_leaderboard("RankedFFA", "FFA", 100)
+            .await
+            .unwrap();
+        let winner_row = leaderboard
+            .iter()
+            .find(|entry| entry.account_id == *winner_id)
+            .unwrap();
+        assert_eq!(winner_row.score, 30);
+        assert!(!winner_row.is_bot);
     }
 
     #[tokio::test]
@@ -7893,7 +8388,10 @@ mod tests {
         profile.matches_played = 1;
         let views = profile.achievement_views();
         assert_eq!(views.len(), crate::rewards::all_achievements().len());
-        assert!(views.len() > 1000, "Must contain hundreds of achievements across all heroes");
+        assert!(
+            views.len() > 1000,
+            "Must contain hundreds of achievements across all heroes"
+        );
         assert_eq!(
             views[..9]
                 .iter()
@@ -8086,6 +8584,7 @@ mod tests {
                     level: 1,
                     matches_played: wins,
                     wins,
+                    ..Default::default()
                 };
                 let json = serde_json::to_vec(&entry).unwrap();
                 let key = verified_victory_key(wins, account_id);
@@ -8331,13 +8830,25 @@ mod tests {
         assert_eq!((profile.crowns, profile.gems), (147, 53));
         let receipt = &profile.reward_receipts["ad_double:m0"];
         assert_eq!((receipt.crowns, receipt.gems), (147, 53));
-        assert_eq!(receipt.verification_status, Some(ReplayVerificationStatus::Verified));
-        assert_eq!(double(&mut profile, "m0"), Err("match reward already doubled"));
+        assert_eq!(
+            receipt.verification_status,
+            Some(ReplayVerificationStatus::Verified)
+        );
+        assert_eq!(
+            double(&mut profile, "m0"),
+            Err("match reward already doubled")
+        );
 
         seed(&mut profile, "pending", false, now - 60);
-        assert_eq!(double(&mut profile, "pending"), Err("match reward is not verified"));
+        assert_eq!(
+            double(&mut profile, "pending"),
+            Err("match reward is not verified")
+        );
         seed(&mut profile, "old", true, now - AD_DOUBLE_WINDOW_SECS - 1);
-        assert_eq!(double(&mut profile, "old"), Err("match reward is too old to double"));
+        assert_eq!(
+            double(&mut profile, "old"),
+            Err("match reward is too old to double")
+        );
 
         for index in 1..AD_DOUBLES_PER_DAY {
             let id = format!("m{index}");
@@ -8707,7 +9218,11 @@ mod tests {
         let mut profile = PlayerProfile::default();
         profile.owned_skins.insert("ember_vein".to_string());
         let unlocked = profile.refresh_achievements();
-        assert!(unlocked.iter().any(|achievement| achievement.id == "skin_1"));
+        assert!(
+            unlocked
+                .iter()
+                .any(|achievement| achievement.id == "skin_1")
+        );
         assert!(profile.unlocked_achievements.contains("skin_1"));
 
         for skin in ["storm_grid", "royal_lattice", "tidal_crest", "hex_bastion"] {
@@ -8733,7 +9248,12 @@ mod tests {
             crate::profile::RewardSettlementStatus::Applied
         );
         assert_eq!(receipt.laurels, 25);
-        assert!(receipt.unlocked_achievements.iter().any(|id| id == "skin_1"));
+        assert!(
+            receipt
+                .unlocked_achievements
+                .iter()
+                .any(|id| id == "skin_1")
+        );
 
         let mut quiet = PlayerProfile::default();
         quiet.refresh_achievements_for_purchase("purchase:in_game:leader:none", 7);
@@ -8920,9 +9440,24 @@ mod tests {
 
         let after_free_swap = db.swap_mission(player, &first_daily, false).await.unwrap();
         assert_eq!(after_free_swap.profile.daily_swaps_used, 1);
-        assert!(after_free_swap.profile.daily_swapped_out_ids.contains(&first_daily));
-        assert!(!after_free_swap.profile.daily_mission_ids.contains(&first_daily));
-        assert!(!after_free_swap.profile.missions_progress.contains_key(&first_daily));
+        assert!(
+            after_free_swap
+                .profile
+                .daily_swapped_out_ids
+                .contains(&first_daily)
+        );
+        assert!(
+            !after_free_swap
+                .profile
+                .daily_mission_ids
+                .contains(&first_daily)
+        );
+        assert!(
+            !after_free_swap
+                .profile
+                .missions_progress
+                .contains_key(&first_daily)
+        );
         let second_daily = after_free_swap.profile.daily_mission_ids[0].clone();
 
         // Second free swap fails because free quota (1/day) is spent.
@@ -8931,8 +9466,18 @@ mod tests {
         // Ad-backed second swap succeeds without re-dealing first_daily.
         let after_ad_swap = db.swap_mission(player, &second_daily, true).await.unwrap();
         assert_eq!(after_ad_swap.profile.daily_swaps_used, 2);
-        assert!(!after_ad_swap.profile.daily_mission_ids.contains(&first_daily));
-        assert!(!after_ad_swap.profile.daily_mission_ids.contains(&second_daily));
+        assert!(
+            !after_ad_swap
+                .profile
+                .daily_mission_ids
+                .contains(&first_daily)
+        );
+        assert!(
+            !after_ad_swap
+                .profile
+                .daily_mission_ids
+                .contains(&second_daily)
+        );
         let third_daily = after_ad_swap.profile.daily_mission_ids[0].clone();
 
         // Third swap (even with ad) fails because daily cap (2) is exhausted.
@@ -8984,9 +9529,24 @@ mod tests {
             .ensure_human_onboarding(db.load_account(player).await.unwrap())
             .await
             .unwrap();
-        assert!(enrolled.profile.menu_guides.contains_key("post_match_missions"));
-        assert!(enrolled.profile.menu_guides.contains_key("daily_ops_unlock"));
-        assert!(enrolled.profile.menu_guides.contains_key("weekly_ranked_unlock"));
+        assert!(
+            enrolled
+                .profile
+                .menu_guides
+                .contains_key("post_match_missions")
+        );
+        assert!(
+            enrolled
+                .profile
+                .menu_guides
+                .contains_key("daily_ops_unlock")
+        );
+        assert!(
+            enrolled
+                .profile
+                .menu_guides
+                .contains_key("weekly_ranked_unlock")
+        );
 
         // Muting all tips marks active guides skipped and sets menu_tips_disabled = true.
         let muted = db
@@ -9002,10 +9562,105 @@ mod tests {
             .await
             .unwrap();
         assert!(muted.profile.menu_tips_disabled);
-        assert!(muted
-            .profile
-            .menu_guides
-            .values()
-            .all(|g| g.status.is_terminal()));
+        assert!(
+            muted
+                .profile
+                .menu_guides
+                .values()
+                .all(|g| g.status.is_terminal())
+        );
+    }
+
+    #[tokio::test]
+    async fn ranked_leaderboard_backfills_refreshes_on_profile_update_and_removes_on_delete() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("lb-backfill.redb");
+        let redb = std::sync::Arc::new(crate::redb_store::init_database(&db_path).unwrap());
+        let db = PlayerDb::new("redis://127.0.0.1:6379/0", None, Some(redb.clone()));
+
+        let alice_id = "11111111111111111111111111111111";
+        let bob_id = "22222222222222222222222222222222";
+        let regular_bot_id = "33333333333333333333333333333333";
+
+        let mut alice = test_account(AccountKind::Human);
+        alice.id = alice_id.into();
+        alice.display_name = "Alice".into();
+        alice.profile.preferred_leader = Some("Caesar".into());
+        alice.profile.level = 9;
+        db.insert_account_sync(alice).unwrap();
+
+        let mut bob = test_account(AccountKind::Human);
+        bob.id = bob_id.into();
+        bob.display_name = "Bob".into();
+        bob.profile.preferred_leader = Some("Boudica".into());
+        bob.profile.level = 5;
+        db.insert_account_sync(bob).unwrap();
+
+        let mut reg_bot = test_account(AccountKind::Bot);
+        reg_bot.id = regular_bot_id.into();
+        reg_bot.display_name = "CasualBot".into();
+        db.insert_account_sync(reg_bot).unwrap();
+
+        {
+            let write = redb.begin_write().unwrap();
+            {
+                let mut ratings = write.open_table(super::SEASON_RATINGS_TABLE).unwrap();
+                for (id, score, wins, games) in [
+                    (alice_id, 6200_u16, 20_u32, 25_u32),
+                    (bob_id, 7100_u16, 30_u32, 40_u32),
+                    (regular_bot_id, 8800_u16, 50_u32, 60_u32),
+                ] {
+                    let mut r = crate::profile::initial_ranked_rating(id.into(), 1200.0, 100);
+                    r.score = score;
+                    r.peak_score = score + 100;
+                    r.wins = wins;
+                    r.games_played = games;
+                    r.normalize_ladder();
+                    let k = format!("rating:{id}:{}:Ranked1v1:FFA", crate::profile::CURRENT_SEASON_ID);
+                    ratings
+                        .insert(k.as_str(), serde_json::to_vec(&r).unwrap().as_slice())
+                        .unwrap();
+                }
+            }
+            // Drop ranked_leaderboard so init_database runs its one-time startup backfill.
+            write.delete_table(super::RANKED_LEADERBOARD_TABLE).unwrap();
+            write.commit().unwrap();
+        }
+        drop(db);
+        drop(redb);
+
+        let reopened = std::sync::Arc::new(crate::redb_store::init_database(&db_path).unwrap());
+        let db = PlayerDb::new("redis://127.0.0.1:6379/0", None, Some(reopened));
+        let epoch_before = db.leaderboard_epoch();
+
+        let board = db.public_leaderboard("Ranked1v1", "FFA", 50).await.unwrap();
+        assert_eq!(board.len(), 2, "casual non-ranked bot must be excluded");
+        assert_eq!(board[0].account_id, bob_id);
+        assert_eq!(board[0].rank, 1);
+        assert_eq!(board[0].tier, "Overlord");
+        assert_eq!(board[0].preferred_leader.as_deref(), Some("Boudica"));
+        assert_eq!(board[1].account_id, alice_id);
+        assert_eq!(board[1].rank, 2);
+
+        // Renaming & switching preferred leader updates indexed leaderboard rows and bumps epoch.
+        db.update_account_atomic(alice_id, &[], |account| {
+            account.display_name = "AliceTheGreat".into();
+            account.profile.preferred_leader = Some("Cleopatra".into());
+        })
+        .await
+        .unwrap();
+        assert!(db.leaderboard_epoch() > epoch_before);
+        let board_after_edit = db.public_leaderboard("Ranked1v1", "FFA", 50).await.unwrap();
+        assert!(board_after_edit[1].handle.starts_with("AliceTheGreat#"));
+        assert_eq!(board_after_edit[1].preferred_leader.as_deref(), Some("Cleopatra"));
+
+        // GDPR deletion scrubs both ranked leaderboard rows and account row cleanly.
+        let epoch_before_del = db.leaderboard_epoch();
+        let (found, _) = db.delete_account_sync(bob_id).unwrap();
+        assert!(found);
+        assert!(db.leaderboard_epoch() > epoch_before_del);
+        let board_after_del = db.public_leaderboard("Ranked1v1", "FFA", 50).await.unwrap();
+        assert_eq!(board_after_del.len(), 1);
+        assert_eq!(board_after_del[0].account_id, alice_id);
     }
 }

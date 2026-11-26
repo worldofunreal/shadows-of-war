@@ -134,8 +134,11 @@ pub fn ranked_game_config(
     rng: &mut impl rand::Rng,
 ) -> Result<GameConfig, &'static str> {
     const MAPS: [&str; 4] = ["oceania", "southeastasia", "northamerica", "world"];
-    let maps: Vec<_> = MAPS.iter().map(|key| catalog.iter().find(|entry| entry.key == *key))
-        .collect::<Option<Vec<_>>>().ok_or("ranked map pool is incomplete")?;
+    let maps: Vec<_> = MAPS
+        .iter()
+        .map(|key| catalog.iter().find(|entry| entry.key == *key))
+        .collect::<Option<Vec<_>>>()
+        .ok_or("ranked map pool is incomplete")?;
     let map = maps[rng.gen_range(0..maps.len())];
     let mut config = GameConfig {
         ranked_1v1: true,
@@ -269,7 +272,9 @@ pub fn validate_server_rules_at_boot() -> Result<(), String> {
 fn server_rules() -> GameConfig {
     static LAST_GOOD: std::sync::Mutex<Option<GameConfig>> = std::sync::Mutex::new(None);
     let path = std::env::var("SOW_CONFIG_PATH").unwrap_or_else(|_| DEFAULT_CONFIG_PATH.into());
-    let mut last_good = LAST_GOOD.lock().unwrap_or_else(|poison| poison.into_inner());
+    let mut last_good = LAST_GOOD
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
     match load_server_rules_from_path(&path) {
         Ok(None) => {
             *last_good = None;
@@ -338,7 +343,12 @@ fn spawn_waiting_lobby(
         // Matchmaking: draw the next map from the mode's weighted playlist.
         let mut c = server_rules();
         let pool = crate::map_catalog::entries();
-        let entry = crate::map_playlist::next_map_for_mode(&game_mode, pool)
+        let playlist_mode = if kind == LobbyKind::RankedFFA {
+            "RankedFFA"
+        } else {
+            &game_mode
+        };
+        let entry = crate::map_playlist::next_map_for_mode(playlist_mode, pool)
             .and_then(|key| crate::map_catalog::lookup(&key));
         if let Some(entry) = entry.as_ref() {
             c.map_name = entry.key.clone();
@@ -357,10 +367,13 @@ fn spawn_waiting_lobby(
         config.nation_count = 0;
     }
 
-    if kind == LobbyKind::Matchmaking {
+    if matches!(kind, LobbyKind::Matchmaking | LobbyKind::RankedFFA) {
         let mut rng = rand::thread_rng();
-        let population =
-            crate::matchmaking_population::roll(map_entry.as_ref(), &game_mode, &mut rng);
+        let population = if kind == LobbyKind::RankedFFA {
+            crate::matchmaking_population::roll_ranked_ffa(&mut rng)
+        } else {
+            crate::matchmaking_population::roll(map_entry.as_ref(), &game_mode, &mut rng)
+        };
         config.max_players = population.max_players;
         config.bot_count = population.bot_count;
         config.nation_count = population.nation_count;
@@ -453,17 +466,17 @@ fn ensure_queue_depth(games: &mut Vec<ServerLobby>, next_id: &mut u64) {
 
 fn promote_countdown(games: &mut [ServerLobby]) {
     // Custom lobbies are NEVER auto-promoted — they start only when the host calls force_start().
-    // Both passes below are strictly Matchmaking-only.
+    // Ranked FFA uses the same countdown path, without the public empty-lobby beacon.
 
-    // Pass 1: any non-empty Matchmaking waiting lobby starts immediately, unblocked.
+    // Pass 1: non-empty Matchmaking and Ranked FFA lobbies start their countdown.
     for g in games.iter_mut() {
         if matches!(g.phase, LobbyPhase::Waiting)
-            && g.kind == LobbyKind::Matchmaking
+            && matches!(g.kind, LobbyKind::Matchmaking | LobbyKind::RankedFFA)
             && !g.players.is_empty()
         {
             g.phase = LobbyPhase::CountingDown;
             g.countdown_secs = LOBBY_COUNTDOWN_SECS;
-            log::info!("[LOBBY] {} Matchmaking→CountingDown (has players)", g.id);
+            log::info!("[LOBBY] {} {:?}→CountingDown (has players)", g.id, g.kind);
         }
     }
 
@@ -492,6 +505,13 @@ fn promote_countdown(games: &mut [ServerLobby]) {
     // Ghost players (is_internal_bot=true) — each client's engine auto-plays them
     // via execute_ai_think. Zero sockets, zero relay overhead.
     crate::bot_fill::inject_internal_bots(games);
+    for lobby in games.iter_mut().filter(|lobby| {
+        lobby.kind == LobbyKind::RankedFFA
+            && lobby.phase == LobbyPhase::CountingDown
+            && lobby.players.len() >= lobby.config.max_players as usize
+    }) {
+        lobby.countdown_secs = 0.0;
+    }
 }
 
 /// Returns the active server-spawned queue lobby regardless of its rotating mode.
@@ -519,7 +539,10 @@ pub struct RankedSearch {
 /// Select the oldest search that has a compatible human opponent, then its
 /// closest opponent. The longer-waiting search's window decides, so a newcomer
 /// can join a player who already earned a wider rating window.
-pub fn ranked_human_pair(searches: &[RankedSearch], now: std::time::Instant) -> Option<(usize, usize)> {
+pub fn ranked_human_pair(
+    searches: &[RankedSearch],
+    now: std::time::Instant,
+) -> Option<(usize, usize)> {
     let window = |search: &RankedSearch| {
         let seconds = now.saturating_duration_since(search.entered_at).as_secs();
         100.0 * (seconds + 1).min(3) as f64
@@ -528,28 +551,47 @@ pub fn ranked_human_pair(searches: &[RankedSearch], now: std::time::Instant) -> 
     order.sort_by_key(|&i| (searches[i].entered_at, i));
     for &i in &order {
         let a = &searches[i];
-        if !a.rating.is_finite() { continue; }
-        let candidate = order.iter().copied().filter(|&j| {
-            let b = &searches[j];
-            let difference = (a.rating - b.rating).abs();
-            i != j && a.account_id != b.account_id && b.rating.is_finite()
-                && difference <= window(a).max(window(b))
-        }).min_by(|&left, &right| {
-            (a.rating - searches[left].rating).abs().total_cmp(&(a.rating - searches[right].rating).abs())
-                .then_with(|| searches[left].entered_at.cmp(&searches[right].entered_at))
-                .then_with(|| left.cmp(&right))
-        });
-        if let Some(j) = candidate { return Some((i, j)); }
+        if !a.rating.is_finite() {
+            continue;
+        }
+        let candidate = order
+            .iter()
+            .copied()
+            .filter(|&j| {
+                let b = &searches[j];
+                let difference = (a.rating - b.rating).abs();
+                i != j
+                    && a.account_id != b.account_id
+                    && b.rating.is_finite()
+                    && difference <= window(a).max(window(b))
+            })
+            .min_by(|&left, &right| {
+                (a.rating - searches[left].rating)
+                    .abs()
+                    .total_cmp(&(a.rating - searches[right].rating).abs())
+                    .then_with(|| searches[left].entered_at.cmp(&searches[right].entered_at))
+                    .then_with(|| left.cmp(&right))
+            });
+        if let Some(j) = candidate {
+            return Some((i, j));
+        }
     }
     None
 }
 
-fn resolve_join_target(requested: Option<u64>, games: &[ServerLobby]) -> Option<u64> {
+fn resolve_join_target(
+    requested: Option<u64>,
+    games: &[ServerLobby],
+    allow_ranked_ffa: bool,
+) -> Option<u64> {
     if let Some(id) = requested {
-        if games
-            .iter()
-            .any(|g| g.id == id && g.kind != LobbyKind::Ranked1v1 && g.joinable() && g.players.len() < g.config.max_players as usize)
-        {
+        if games.iter().any(|g| {
+            g.id == id
+                && g.kind != LobbyKind::Ranked1v1
+                && (allow_ranked_ffa || g.kind != LobbyKind::RankedFFA)
+                && g.joinable()
+                && g.players.len() < g.config.max_players as usize
+        }) {
             return Some(id);
         }
         return None;
@@ -561,7 +603,7 @@ fn resolve_or_spawn_matchmaking_lobby(
     games: &mut Vec<ServerLobby>,
     next_id: &mut u64,
 ) -> Result<u64, &'static str> {
-    if let Some(id) = resolve_join_target(None, games) {
+    if let Some(id) = resolve_join_target(None, games, false) {
         return Ok(id);
     }
 
@@ -578,6 +620,49 @@ fn resolve_or_spawn_matchmaking_lobby(
             host_name: String::new(),
         },
     )
+}
+
+/// Reuse the public FFA map and lobby pipeline while keeping Ranked FFA out of
+/// the rotating public queue.
+pub fn resolve_or_spawn_ranked_ffa_lobby(
+    games: &mut Vec<ServerLobby>,
+    next_id: &mut u64,
+) -> Result<u64, &'static str> {
+    if let Some(lobby) = games.iter().find(|lobby| {
+        lobby.kind == LobbyKind::RankedFFA
+            && lobby.joinable()
+            && lobby.players.len() < lobby.config.max_players as usize
+    }) {
+        return Ok(lobby.id);
+    }
+
+    spawn_waiting_lobby(
+        games,
+        next_id,
+        SpawnLobbyOpts {
+            game_mode: "FFA".to_string(),
+            kind: LobbyKind::RankedFFA,
+            is_private: true,
+            config_override: None,
+            password: None,
+            host_name: String::new(),
+        },
+    )
+}
+
+/// Join the server-owned Ranked FFA queue without accepting a client-chosen
+/// lobby or configuration.
+pub fn join_ranked_ffa_player(
+    games: &mut Vec<ServerLobby>,
+    next_id: &mut u64,
+    mut opts: JoinPlayerOpts,
+) -> Result<(u64, u16, String, bool), String> {
+    if opts.target_lobby_id.is_some() || opts.host_private || opts.host_config.is_some() {
+        return Err("INVALID_RANKED_REQUEST".to_string());
+    }
+    let lobby_id = resolve_or_spawn_ranked_ffa_lobby(games, next_id).map_err(str::to_owned)?;
+    opts.target_lobby_id = Some(lobby_id);
+    join_player_inner(games, next_id, opts, true)
 }
 
 pub struct JoinPlayerOpts {
@@ -602,6 +687,15 @@ pub fn join_player(
     games: &mut Vec<ServerLobby>,
     next_id: &mut u64,
     opts: JoinPlayerOpts,
+) -> Result<(u64, u16, String, bool), String> {
+    join_player_inner(games, next_id, opts, false)
+}
+
+fn join_player_inner(
+    games: &mut Vec<ServerLobby>,
+    next_id: &mut u64,
+    opts: JoinPlayerOpts,
+    allow_ranked_ffa: bool,
 ) -> Result<(u64, u16, String, bool), String> {
     let name = normalize_player_name(&opts.name);
     let clan_tag = opts.clan_tag;
@@ -697,7 +791,7 @@ pub fn join_player(
         is_new_host = true;
         games.last().unwrap().id
     } else if let Some(req) = target_lobby_id {
-        match resolve_join_target(Some(req), games) {
+        match resolve_join_target(Some(req), games, allow_ranked_ffa) {
             Some(id) => id,
             None if opts.target_is_retired_matchmaking
                 || games
@@ -877,6 +971,28 @@ pub fn leave_player(games: &mut [ServerLobby], lobby_id: u64, player_id: u16) {
         lobby.ready_players.remove(&player_id);
         if before != lobby.players.len() {
             log::info!("Player {} left lobby {}", player_id, lobby_id);
+            if lobby.kind == LobbyKind::RankedFFA
+                && matches!(lobby.phase, LobbyPhase::Waiting | LobbyPhase::CountingDown)
+                && !lobby.players.iter().any(|player| !player.is_internal_bot)
+            {
+                lobby.players.clear();
+                lobby.ready_players.clear();
+                lobby.phase = LobbyPhase::Waiting;
+                lobby.countdown_secs = 0.0;
+                lobby.bot_fill_target = None;
+                lobby.pending_bots.clear();
+            } else if lobby.kind == LobbyKind::RankedFFA
+                && lobby.phase == LobbyPhase::Loading
+                && lobby.players.iter().any(|player| !player.is_internal_bot)
+                && lobby.players.len()
+                    < crate::matchmaking_population::MIN_RANKED_FFA_PARTICIPANTS as usize
+            {
+                // Preparation had already started but the departure invalidated
+                // the minimum roster. Reopen the normal countdown; its standard
+                // scattered Ghost fill replaces the missing seat before relay.
+                lobby.phase = LobbyPhase::CountingDown;
+                lobby.countdown_secs = LOBBY_COUNTDOWN_SECS;
+            }
             // Lobbies in ReadyForRelay don't care, they are about to be dropped.
         }
     }
@@ -1111,9 +1227,26 @@ pub fn master_tick(
                 LobbyPhase::CountingDown => {
                     lobby.countdown_secs -= TICK_SECS;
                     if lobby.countdown_secs <= 0.0 {
-                        start_match(lobby);
-                        if lobby.kind == LobbyKind::Matchmaking {
-                            retired_matchmaking_ids.insert(lobby.id);
+                        if lobby.kind == LobbyKind::RankedFFA
+                            && lobby.players.len()
+                                < crate::matchmaking_population::MIN_RANKED_FFA_PARTICIPANTS
+                                    as usize
+                        {
+                            // Never launch a ranked FFA below its advertised minimum.
+                            // Keep the queue alive so a later join or Ghost refill can
+                            // satisfy it before handing the roster to the relay.
+                            lobby.countdown_secs = TICK_SECS;
+                            log::warn!(
+                                "[RANKED_FFA] Lobby {} held before launch at {}/{} participants",
+                                lobby.id,
+                                lobby.players.len(),
+                                crate::matchmaking_population::MIN_RANKED_FFA_PARTICIPANTS
+                            );
+                        } else {
+                            start_match(lobby);
+                            if lobby.kind == LobbyKind::Matchmaking {
+                                retired_matchmaking_ids.insert(lobby.id);
+                            }
                         }
                     }
                     false
@@ -1300,7 +1433,7 @@ pub fn build_lobby_broadcast(games: &[ServerLobby]) -> Vec<LobbyInfo> {
                 && match g.kind {
                     LobbyKind::Matchmaking => g.players.len() < g.config.max_players as usize,
                     LobbyKind::Custom => !g.is_private,
-                    LobbyKind::Ranked1v1 => false,
+                    LobbyKind::Ranked1v1 | LobbyKind::RankedFFA => false,
                 }
         })
         .map(lobby_to_info)
@@ -1330,31 +1463,204 @@ mod name_tests {
 
     #[test]
     fn ranked_pair_uses_the_longer_wait_window_and_oldest_compatible_search() {
-        use super::{ranked_human_pair, RankedSearch};
+        use super::{RankedSearch, ranked_human_pair};
         use std::time::{Duration, Instant};
         let now = Instant::now();
         let searches = vec![
-            RankedSearch { account_id: "a".into(), rating: 1000.0, entered_at: now - Duration::from_secs(2) },
-            RankedSearch { account_id: "b".into(), rating: 1150.0, entered_at: now },
-            RankedSearch { account_id: "c".into(), rating: 1090.0, entered_at: now },
+            RankedSearch {
+                account_id: "a".into(),
+                rating: 1000.0,
+                entered_at: now - Duration::from_secs(2),
+            },
+            RankedSearch {
+                account_id: "b".into(),
+                rating: 1150.0,
+                entered_at: now,
+            },
+            RankedSearch {
+                account_id: "c".into(),
+                rating: 1090.0,
+                entered_at: now,
+            },
         ];
         assert_eq!(ranked_human_pair(&searches, now), Some((0, 2)));
         // A waited 2 s (window 300); B is a newcomer at gap 150 and pairs now.
         assert_eq!(ranked_human_pair(&searches[..2], now), Some((0, 1)));
         // Two fresh searches (window 100 each) at gap 150 do not pair.
         let fresh = vec![
-            RankedSearch { account_id: "x".into(), rating: 1000.0, entered_at: now },
-            RankedSearch { account_id: "y".into(), rating: 1150.0, entered_at: now },
+            RankedSearch {
+                account_id: "x".into(),
+                rating: 1000.0,
+                entered_at: now,
+            },
+            RankedSearch {
+                account_id: "y".into(),
+                rating: 1150.0,
+                entered_at: now,
+            },
         ];
         assert_eq!(ranked_human_pair(&fresh, now), None);
-        assert_eq!(ranked_human_pair(&fresh, now + Duration::from_secs(2)), Some((0, 1)));
+        assert_eq!(
+            ranked_human_pair(&fresh, now + Duration::from_secs(2)),
+            Some((0, 1))
+        );
     }
 
     #[test]
     fn ranked_lobby_is_not_broadcast_or_joinable_by_id() {
         let lobby = queue_lobby(42, LobbyKind::Ranked1v1, "FFA");
         assert!(build_lobby_broadcast(std::slice::from_ref(&lobby)).is_empty());
-        assert_eq!(resolve_join_target(Some(42), &[lobby]), None);
+        assert_eq!(resolve_join_target(Some(42), &[lobby], false), None);
+    }
+
+    #[test]
+    fn ranked_ffa_lobby_requires_the_server_queue_join_path() {
+        let mut games = vec![queue_lobby(43, LobbyKind::RankedFFA, "FFA")];
+        let mut next_id = 44;
+        assert_eq!(
+            join_player(
+                &mut games,
+                &mut next_id,
+                join_options(Some(43), channel_sender())
+            )
+            .unwrap_err(),
+            "Lobby is not accepting joins"
+        );
+        assert_eq!(
+            super::join_ranked_ffa_player(
+                &mut games,
+                &mut next_id,
+                join_options(None, channel_sender())
+            )
+            .unwrap()
+            .0,
+            43
+        );
+    }
+
+    #[test]
+    fn ranked_ffa_waiting_lobby_reopens_when_its_last_human_leaves() {
+        let mut lobby = queue_lobby(42, LobbyKind::RankedFFA, "FFA");
+        lobby.phase = LobbyPhase::CountingDown;
+        lobby.countdown_secs = 7.0;
+        lobby.bot_fill_target = Some(16);
+        lobby.pending_bots.push(("bot".into(), "Ghost".into(), 9.0));
+        lobby.players.push(PlayerConnection {
+            name: "Human".into(),
+            clan_tag: String::new(),
+            player_id: 1,
+            tx: channel_sender(),
+            download_progress: 0,
+            leader: Leader::default(),
+            random_leader: false,
+            skin_style: 0,
+            database_account_id: Some("human".into()),
+            team: None,
+            ip: String::new(),
+            session_id: Some(1),
+            is_internal_bot: false,
+            ranked_rating: None,
+            ranked_search_started_at: None,
+            league_score: None,
+        });
+        lobby.players.push(PlayerConnection {
+            name: "Ghost".into(),
+            clan_tag: String::new(),
+            player_id: 2,
+            tx: channel_sender(),
+            download_progress: 0,
+            leader: Leader::default(),
+            random_leader: false,
+            skin_style: 0,
+            database_account_id: Some("bot".into()),
+            team: None,
+            ip: String::new(),
+            session_id: None,
+            is_internal_bot: true,
+            ranked_rating: None,
+            ranked_search_started_at: None,
+            league_score: None,
+        });
+        let mut games = vec![lobby];
+
+        leave_player(&mut games, 42, 1);
+
+        let lobby = &games[0];
+        assert_eq!(lobby.phase, LobbyPhase::Waiting);
+        assert!(lobby.players.is_empty());
+        assert_eq!(lobby.bot_fill_target, None);
+        assert!(lobby.pending_bots.is_empty());
+    }
+
+    #[test]
+    fn ranked_ffa_loading_reopens_below_the_sixteen_player_minimum() {
+        let mut lobby = queue_lobby(44, LobbyKind::RankedFFA, "FFA");
+        lobby.config.max_players = 18;
+        lobby.phase = LobbyPhase::Loading;
+        lobby.bot_fill_target = Some(16);
+        let human = |player_id| PlayerConnection {
+            name: format!("Human{player_id}"),
+            clan_tag: String::new(),
+            player_id,
+            tx: channel_sender(),
+            download_progress: 100,
+            leader: Leader::default(),
+            random_leader: false,
+            skin_style: 0,
+            database_account_id: Some(format!("human-{player_id}")),
+            team: None,
+            ip: "127.0.0.1".to_string(),
+            session_id: Some(u64::from(player_id)),
+            is_internal_bot: false,
+            ranked_rating: None,
+            ranked_search_started_at: None,
+            league_score: None,
+        };
+        lobby.players.extend([human(1), human(2)]);
+        let mut games = vec![lobby];
+
+        leave_player(&mut games, 44, 1);
+
+        let lobby = &games[0];
+        assert_eq!(lobby.phase, LobbyPhase::CountingDown);
+        assert_eq!(lobby.countdown_secs, LOBBY_COUNTDOWN_SECS);
+        assert_eq!(lobby.players.len(), 1);
+        assert_eq!(lobby.bot_fill_target, Some(16));
+    }
+
+    #[test]
+    fn ranked_ffa_countdown_does_not_launch_below_sixteen_players() {
+        let mut lobby = queue_lobby(45, LobbyKind::RankedFFA, "FFA");
+        lobby.config.max_players = 18;
+        lobby.phase = LobbyPhase::CountingDown;
+        lobby.countdown_secs = TICK_SECS;
+        lobby.players.push(PlayerConnection {
+            name: "Human".into(),
+            clan_tag: String::new(),
+            player_id: 1,
+            tx: channel_sender(),
+            download_progress: 100,
+            leader: Leader::default(),
+            random_leader: false,
+            skin_style: 0,
+            database_account_id: Some("human".into()),
+            team: None,
+            ip: "127.0.0.1".into(),
+            session_id: Some(1),
+            is_internal_bot: false,
+            ranked_rating: None,
+            ranked_search_started_at: None,
+            league_score: None,
+        });
+        let mut games = vec![lobby];
+        let mut next_id = 46;
+
+        master_tick(&mut games, &mut next_id, &mut HashSet::new());
+
+        let lobby = games.iter().find(|lobby| lobby.id == 45).unwrap();
+        assert_eq!(lobby.phase, LobbyPhase::CountingDown);
+        assert_eq!(lobby.players.len(), 1);
+        assert!(lobby.countdown_secs > 0.0);
     }
 
     #[test]
@@ -1381,13 +1687,14 @@ mod name_tests {
             None
         );
 
-        let path = std::env::temp_dir().join(format!(
-            "sow-server-rules-test-{}.json",
-            std::process::id()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("sow-server-rules-test-{}.json", std::process::id()));
         std::fs::write(&path, r#"{"hero_factory_troop_income": 275.0}"#).unwrap();
         let err = super::load_server_rules_from_path(path.to_str().unwrap()).unwrap_err();
-        assert!(err.contains("unknown key hero_factory_troop_income"), "{err}");
+        assert!(
+            err.contains("unknown key hero_factory_troop_income"),
+            "{err}"
+        );
 
         std::fs::write(&path, r#"{"troop_base_income": 175.0}"#).unwrap();
         let loaded = super::load_server_rules_from_path(path.to_str().unwrap())
@@ -1408,7 +1715,8 @@ mod name_tests {
         for seed in 0..256 {
             let mut rng = StdRng::seed_from_u64(seed);
             let config = ranked_game_config(&catalog.entries, &mut rng).unwrap();
-            let map = catalog.entries
+            let map = catalog
+                .entries
                 .iter()
                 .find(|entry| entry.key == config.map_name)
                 .unwrap();
@@ -1420,16 +1728,21 @@ mod name_tests {
             );
             assert_eq!(config.max_players, 2);
             assert_eq!(config.nation_count, 0);
-            assert_eq!(config.bot_count, map.num_land_tiles.div_ceil(600));
+            assert_eq!(
+                config.bot_count,
+                map.num_land_tiles
+                    .div_ceil(600)
+                    .min(GameConfig::max_tribe_bots())
+            );
             selected.insert(config.map_name);
         }
         assert_eq!(selected, expected.into_iter().map(str::to_string).collect());
     }
     use super::{
-        JoinPlayerOpts, LobbyKind, LobbyPhase, PlayerConnection, ServerLobby, SpawnLobbyOpts,
-        build_lobby_broadcast, ensure_queue_depth, join_player, kick_player, master_tick,
-        normalize_map_roster, normalize_player_name, resolve_join_target, set_player_team,
-        spawn_waiting_lobby,
+        JoinPlayerOpts, LOBBY_COUNTDOWN_SECS, LobbyKind, LobbyPhase, PlayerConnection, ServerLobby,
+        SpawnLobbyOpts, TICK_SECS, build_lobby_broadcast, ensure_queue_depth, join_player,
+        kick_player, leave_player, master_tick, normalize_map_roster, normalize_player_name,
+        resolve_join_target, set_player_team, spawn_waiting_lobby,
     };
     use sow_core::game_config::GameConfig;
     use sow_core::player::Leader;
@@ -1546,7 +1859,7 @@ mod name_tests {
     #[test]
     fn quick_match_follows_rotating_matchmaking_mode() {
         let games = vec![queue_lobby(10, LobbyKind::Matchmaking, "Teams")];
-        assert_eq!(resolve_join_target(None, &games), Some(10));
+        assert_eq!(resolve_join_target(None, &games, false), Some(10));
     }
 
     #[test]
@@ -1633,10 +1946,7 @@ mod name_tests {
             games[0].config.map_control_win_percentage,
             rules.map_control_win_percentage
         );
-        assert_eq!(
-            games[0].config.global_speed_multiplier,
-            0.288
-        );
+        assert_eq!(games[0].config.global_speed_multiplier, 0.288);
         assert_eq!(games[0].config.cost_city, rules.cost_city);
     }
 
@@ -1661,7 +1971,7 @@ mod name_tests {
     #[test]
     fn quick_match_does_not_select_custom_lobbies() {
         let games = vec![queue_lobby(10, LobbyKind::Custom, "FFA")];
-        assert_eq!(resolve_join_target(None, &games), None);
+        assert_eq!(resolve_join_target(None, &games, false), None);
     }
 
     #[test]

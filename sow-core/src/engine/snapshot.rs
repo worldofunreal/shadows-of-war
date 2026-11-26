@@ -15,7 +15,6 @@ impl SowEngine {
                 .collect()
         };
         self.state.map.dirty_tiles = dirty_indices;
-        self.refresh_building_aggregates();
 
         let tick = self.current_tick_u32();
         let proposed = &self.alliances_proposed;
@@ -94,24 +93,37 @@ impl SowEngine {
         let mut nuke_cooldown_by_player = vec![0u32; max_pid + 1];
         for building in &self.buildings {
             let pid = usize::from(building.owner_id);
-            if pid > max_pid || building.kind != crate::game::BuildingKind::MissileSilo {
+            if pid > max_pid {
                 continue;
             }
-            nuke_available_by_player[pid] |=
-                self.nuclear_charges(building.id, building.active_level()) > 0;
+            let charges_cap = match building.kind {
+                crate::game::BuildingKind::MilitaryCamp if building.active_level() >= 5 => {
+                    building.active_level().saturating_sub(4)
+                }
+                crate::game::BuildingKind::MissileSilo if self.legacy_building_rules => {
+                    building.active_level()
+                }
+                _ => 0,
+            };
+            if charges_cap == 0 {
+                continue;
+            }
+            nuke_available_by_player[pid] |= self.nuclear_charges(building.id, charges_cap) > 0;
             let wait = self.nuclear_wait_ticks(building.id);
             let current = &mut nuke_cooldown_by_player[pid];
             if wait > 0 && (*current == 0 || wait < *current) {
                 *current = wait;
             }
         }
-        let nuclear_city_level =
-            crate::building::nuclear_city_level(self.campaign_unlocks.is_some());
-        for (available, aggregate) in nuke_available_by_player
-            .iter_mut()
-            .zip(&self.building_aggregates)
-        {
-            *available &= aggregate.highest_city_level >= nuclear_city_level;
+        if self.legacy_building_rules {
+            let nuclear_city_level =
+                crate::building::nuclear_city_level(self.campaign_unlocks.is_some());
+            for (available, aggregate) in nuke_available_by_player
+                .iter_mut()
+                .zip(&self.building_aggregates)
+            {
+                *available &= aggregate.highest_city_level >= nuclear_city_level;
+            }
         }
 
         let mut empowered_attack_by_player = vec![false; max_pid + 1];
@@ -291,8 +303,15 @@ impl SowEngine {
                 let has_anti_nuke = self.legacy_building_rules
                     && b.kind == crate::game::BuildingKind::City
                     && production.has_anti_nuke;
-                let nuke_ready = b.kind == crate::game::BuildingKind::MissileSilo
-                    && self.nuclear_charges(b.id, b.active_level()) > 0;
+                let nuke_ready = match b.kind {
+                    crate::game::BuildingKind::MilitaryCamp if b.active_level() >= 5 => {
+                        self.nuclear_charges(b.id, b.active_level().saturating_sub(4)) > 0
+                    }
+                    crate::game::BuildingKind::MissileSilo => {
+                        self.nuclear_charges(b.id, b.active_level()) > 0
+                    }
+                    _ => false,
+                };
                 let (arsenal_build, warship_queue) = if b.kind == crate::game::BuildingKind::Port {
                     (production.active_warship_build(), production.warship_queue)
                 } else {

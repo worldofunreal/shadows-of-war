@@ -1151,6 +1151,7 @@ fn site_media_ready(out: &Path) -> bool {
 
 fn validate_runtime_source_rasters(root: &Path) -> Result<()> {
     let building_sources = root.join("assets/art/buildings");
+    let ranked_sources = root.join("assets/art/ranked");
     let map_assets = root.join("assets/maps");
     let map_sources = root.join("assets/maps/_sources");
     for entry in walkdir::WalkDir::new(root.join("assets")) {
@@ -1159,6 +1160,13 @@ fn validate_runtime_source_rasters(root: &Path) -> Result<()> {
         let packed_building_png = entry.file_type().is_file()
             && ext.eq_ignore_ascii_case("png")
             && entry.path().parent() == Some(building_sources.as_path());
+        // The ten ranked source badges are packed into one optimized WebP atlas.
+        let packed_ranked_png = entry.file_type().is_file()
+            && ext.eq_ignore_ascii_case("png")
+            && entry.path().parent() == Some(ranked_sources.as_path())
+            && RANKED_BADGE_SLOTS.iter().any(|stem| {
+                entry.path().file_stem().and_then(|name| name.to_str()) == Some(*stem)
+            });
         // `sow-tools import-map-source` imports lossless `<slug>/image.png` terrain masks;
         // they stay tool-only and are never published as runtime raster art.
         let map_source_png = entry.file_type().is_file()
@@ -1182,6 +1190,7 @@ fn validate_runtime_source_rasters(root: &Path) -> Result<()> {
         if entry.file_type().is_file()
             && ["png", "jpg", "jpeg"].contains(&ext.to_ascii_lowercase().as_str())
             && !packed_building_png
+            && !packed_ranked_png
             && !map_source_png
             && !map_terrain_tile
         {
@@ -1421,7 +1430,7 @@ fn stage_runtime_assets(root: &Path, out: &Path, pipeline: &ArtPipeline) -> Resu
                 .unwrap_or_default()
                 .to_string_lossy()
                 .into_owned();
-            if dir == "ranked" && name.ends_with(".webp") {
+            if dir == "ranked" && (name.ends_with(".webp") || name.ends_with(".png")) {
                 continue; // packed into shell/ranked/badges.webp below
             }
             let (relative, profile) = if dir == "units" {
@@ -1968,18 +1977,20 @@ fn pack_sprite_atlas(assets: &Path, pipeline: &ArtPipeline) -> Result<()> {
     Ok(())
 }
 
-const RANKED_BADGE_SLOTS: [&str; 8] = [
-    "unranked",
-    "bronze",
-    "silver",
-    "gold",
-    "platinum",
-    "diamond",
-    "master",
-    "grandmaster",
+const RANKED_BADGE_SLOTS: [&str; 10] = [
+    "nomad",
+    "chieftain",
+    "commander",
+    "governor",
+    "king",
+    "emperor",
+    "sovereign",
+    "overlord",
+    "immortal",
+    "deity",
 ];
 
-/// Packs the 8 source PNGs in `assets/art/ranked/` into a single 4×2 WebP
+/// Packs the 10 source PNGs in `assets/art/ranked/` into a single 5×2 WebP
 /// spritesheet (`shell/ranked/badges.webp`, 512 px per badge) for every target.
 fn pack_ranked_badges_sheet(
     ranked_art_dir: &Path,
@@ -1988,13 +1999,13 @@ fn pack_ranked_badges_sheet(
     produced: &mut std::collections::BTreeSet<PathBuf>,
 ) -> Result<()> {
     const CELL: u32 = 512;
-    const COLS: u32 = 4;
+    const COLS: u32 = 5;
     const ROWS: u32 = 2;
     let destination = out.join("shell/ranked/badges.webp");
     let mut source_hasher = Sha256::new();
     let mut sources = Vec::with_capacity(RANKED_BADGE_SLOTS.len());
     for stem in RANKED_BADGE_SLOTS {
-        let path = ranked_art_dir.join(format!("{stem}.webp"));
+        let path = ranked_art_dir.join(format!("{stem}.png"));
         if !path.is_file() {
             if pipeline.local_preview {
                 eprintln!("⚠ Missing ranked badge source {}", path.display());
@@ -3342,6 +3353,8 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         "main_menu.css",
         &[
             "sow-controls.css",
+            "sow-ranked.css",
+            "sow-profile.css",
             "main_menu.base.css",
             "main_menu.layout.css",
             "main_menu.lobbies.css",
@@ -3575,6 +3588,20 @@ fn copy_shell(paths: &Paths, out: &Path, target: WebTarget) -> Result<()> {
         paths.shell.join("sow-controls.css"),
         out.join("sow-controls.css"),
     )?;
+    if matches!(target, WebTarget::Local) {
+        fs::write(
+            out.join("sow-tooltip.js"),
+            compile_shell_ts(&paths.shell, "sow-tooltip.ts")?,
+        )?;
+        fs::copy(
+            paths.shell.join("sow-ranked.css"),
+            out.join("sow-ranked.css"),
+        )?;
+        fs::copy(
+            paths.shell.join("sow-profile.css"),
+            out.join("sow-profile.css"),
+        )?;
+    }
     fs::create_dir_all(out.join("sdk"))?;
     for bridge in ["store_portals", "poki_portals", "jest_portals"] {
         fs::write(
@@ -3599,10 +3626,12 @@ fn copy_shell(paths: &Paths, out: &Path, target: WebTarget) -> Result<()> {
     Ok(())
 }
 
-const PUBLIC_SITE_PAGES: [&str; 12] = [
+const PUBLIC_SITE_PAGES: [&str; 14] = [
     "index.html",
     "maps/index.html",
     "buildings/index.html",
+    "leaderboards/index.html",
+    "players/index.html",
     "support/index.html",
     "privacy/index.html",
     "cookies/index.html",
@@ -3691,7 +3720,8 @@ fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
     let building_effects = BuildingKind::ALL.into_iter().map(|kind| {
         let tiers = (1..=kind.max_level()).map(|level| {
             let troop_capacity = if kind.grants_building_troop_capacity() {
-                config.district_max_troops * building::district_capacity_level_weight(level)
+                config.district_max_troops
+                    * building::district_capacity_weight_for_kind(kind, level)
             } else {
                 0.0
             };
@@ -3726,6 +3756,22 @@ fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
                         sow_core::execution::income_rates::GOLD_PASSIVE_EXCESS_RATE,
                     ),
                     "capture": (building::camp_conquest_multiplier(config.camp_capture_base_points.max(0.0) * building::camp_capture_level_weight(level)) - 1.0) * 100.0,
+                    "charges": if level >= 5 { level.saturating_sub(4) } else { 0 },
+                    "reserve": troop_capacity,
+                }),
+                BuildingKind::Farm => serde_json::json!({
+                    "troops": credited_rate(
+                        config.troop_base_income,
+                        config.farm_troop_income * building::farm_troop_level_weight(level),
+                        sow_core::execution::income_rates::TROOP_PASSIVE_FULL_RATE_CAP,
+                        sow_core::execution::income_rates::TROOP_PASSIVE_EXCESS_RATE,
+                    ),
+                    "gold": credited_rate(
+                        config.gold_base_income,
+                        config.farm_gold_income * building::farm_gold_level_weight(level),
+                        sow_core::execution::income_rates::GOLD_PASSIVE_FULL_RATE_CAP,
+                        sow_core::execution::income_rates::GOLD_PASSIVE_EXCESS_RATE,
+                    ),
                     "reserve": troop_capacity,
                 }),
                 BuildingKind::TradingPost => serde_json::json!({
@@ -3742,6 +3788,7 @@ fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
                     "range": building::tower_range_for_level(level, &config, 1.0),
                     "resistance": building::tower_capture_weight(level),
                     "defense": (building::tower_defense_weight(level, &config) * config.tower_strength).clamp(0.0, 0.50) * 100.0,
+                    "charges": if level >= 5 { level.saturating_sub(4) } else { 0 },
                     "reserve": troop_capacity,
                 }),
                 BuildingKind::Port => serde_json::json!({
@@ -4615,6 +4662,8 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
         ("analytics.ts", "analytics.js", "iife"),
         ("app.ts", "app.js", "iife"),
         ("site-chrome.ts", "site-chrome.js", "iife"),
+        ("leaderboards.ts", "leaderboards.js", "iife"),
+        ("player-profile.ts", "player-profile.js", "iife"),
         ("identity-auth.ts", "identity-auth.js", "esm"),
         ("auth-callback.ts", "auth-callback.js", "esm"),
     ] {
@@ -5887,6 +5936,8 @@ fn package_local_preview(
     for (source, destination, format) in [
         ("app.ts", "app.js", "iife"),
         ("site-chrome.ts", "site-chrome.js", "iife"),
+        ("leaderboards.ts", "leaderboards.js", "iife"),
+        ("player-profile.ts", "player-profile.js", "iife"),
         ("identity-auth.ts", "identity-auth.js", "esm"),
         ("auth-callback.ts", "auth-callback.js", "esm"),
     ] {
@@ -6933,6 +6984,10 @@ shortArticle = true
             "auth-callback.ts",
             "auth/callback/index.html",
             "8d227b8f9e6140d39e3381a1829e1db3.txt",
+            "leaderboards/index.html",
+            "leaderboards.ts",
+            "players/index.html",
+            "player-profile.ts",
             "privacy/index.html",
             "terms/index.html",
             "support/index.html",
@@ -6950,9 +7005,16 @@ shortArticle = true
             "main_menu.ts",
             "sow-i18n.ts",
             "sow-dropdown.ts",
+            "sow-tooltip.ts",
             "experience_events.ts",
             "loader.ts",
             "sow-controls.css",
+            "sow-ranked.css",
+            "sow-profile.css",
+            "sow-profile-helpers.ts",
+            "sow-ranked-presentation.ts",
+            "sow-leaderboard-view.ts",
+            "sow-profile-view.ts",
             "main_menu.base.css",
             "main_menu.layout.css",
             "main_menu.lobbies.css",
@@ -7472,7 +7534,7 @@ shortArticle = true
     }
 
     #[test]
-    fn pack_ranked_badges_sheet_builds_4x2_webp_spritesheet_and_all_site_keys_exist() -> Result<()> {
+    fn pack_ranked_badges_sheet_builds_5x2_webp_spritesheet_and_all_site_keys_exist() -> Result<()> {
         let paths = Paths::discover()?;
         let out = tempfile::tempdir()?;
         let pipeline = ArtPipeline::load(&paths.root)?;
@@ -7483,7 +7545,7 @@ shortArticle = true
         assert!(produced.contains(&sheet), "badges.webp must be registered in produced");
         assert!(sheet.is_file(), "badges.webp missing");
         let (w, h) = image::image_dimensions(&sheet)?;
-        assert_eq!((w, h), (2048, 1024), "badges.webp must be a 4x2 grid of 512px cells");
+        assert_eq!((w, h), (2560, 1024), "badges.webp must be a 5x2 grid of 512px cells");
         assert!(image_has_transparency(&sheet)?, "badges.webp must keep transparent margins");
         let size = fs::metadata(&sheet)?.len();
         assert!(size <= 524_288, "badges.webp exceeded 512 KiB budget: {size}");

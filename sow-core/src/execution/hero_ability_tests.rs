@@ -349,6 +349,11 @@ fn district_income(leader: Leader, district: District, resource: Resource) -> f6
             agg.military_camp_troop_level_weight = 3.0;
             agg.military_camp_gold_level_weight = 3.0;
         }
+        District::Farm => {
+            agg.farm_levels = 3;
+            agg.farm_troop_level_weight = 3.0;
+            agg.farm_gold_level_weight = 3.0;
+        }
     }
     let cfg = GameConfig::default();
     match resource {
@@ -519,6 +524,7 @@ fn district_building(district: District) -> BuildingKind {
         District::TradingPost => BuildingKind::TradingPost,
         District::Port => BuildingKind::Port,
         District::MilitaryCamp => BuildingKind::MilitaryCamp,
+        District::Farm => BuildingKind::Farm,
     }
 }
 
@@ -4627,10 +4633,10 @@ fn redesigned_city_rewards_require_allies_upgrades_and_range() {
     e.hero_structure_ready(city);
     assert_eq!(e.buildings[1].level, 1, "a distant tower cannot be raised");
     e.buildings[1].tile_idx = 20 * 64 + 10;
-    e.buildings[1].level = 4;
+    e.buildings[1].level = 8;
     e.hero_structure_ready(city);
     assert_eq!(
-        e.buildings[1].level, 4,
+        e.buildings[1].level, 8,
         "a tower cannot exceed the level cap"
     );
     e.buildings[1].level = 2;

@@ -52,7 +52,8 @@ impl CampaignUnlocks {
         self.actions.contains(&action)
             && match action {
                 CampaignAction::Nuke => {
-                    self.allows_building(BuildingKind::MissileSilo, 1)
+                    self.allows_building(BuildingKind::MilitaryCamp, 5)
+                        || self.allows_building(BuildingKind::MissileSilo, 1)
                 }
                 _ => action
                     .required_building()

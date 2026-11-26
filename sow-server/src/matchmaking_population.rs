@@ -3,6 +3,9 @@ use sow_core::game_config::GameConfig;
 use sow_core::map_file::MapCatalogEntry;
 
 pub const MIN_MATCHMAKING_PLAYERS: u32 = 12;
+pub const MIN_RANKED_FFA_PARTICIPANTS: u32 = sow_core::protocol::MIN_RANKED_FFA_PARTICIPANTS as u32;
+pub const MIN_RANKED_FFA_CAPACITY: u32 = MIN_RANKED_FFA_PARTICIPANTS + 2;
+pub const MAX_RANKED_FFA_CAPACITY: u32 = 32;
 pub const MAX_MATCHMAKING_PLAYERS: u32 = sow_core::protocol::MAX_MATCH_PARTICIPANTS as u32;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -17,7 +20,28 @@ pub fn roll(
     game_mode: &str,
     rng: &mut impl Rng,
 ) -> MatchmakingPopulation {
-    let max_players = roll_human_capacity(game_mode, rng);
+    roll_with_minimum(game_mode, MIN_MATCHMAKING_PLAYERS, rng)
+}
+
+pub fn roll_ranked_ffa(rng: &mut impl Rng) -> MatchmakingPopulation {
+    roll_with_limits("FFA", MIN_RANKED_FFA_CAPACITY, MAX_RANKED_FFA_CAPACITY, rng)
+}
+
+fn roll_with_minimum(
+    game_mode: &str,
+    minimum_players: u32,
+    rng: &mut impl Rng,
+) -> MatchmakingPopulation {
+    roll_with_limits(game_mode, minimum_players, MAX_MATCHMAKING_PLAYERS, rng)
+}
+
+fn roll_with_limits(
+    game_mode: &str,
+    minimum_players: u32,
+    maximum_players: u32,
+    rng: &mut impl Rng,
+) -> MatchmakingPopulation {
+    let max_players = roll_human_capacity(game_mode, minimum_players, maximum_players, rng);
     let bot_count = GameConfig::max_tribe_bots();
     // Public FFA/Teams stay Tribes-only; Co-op Bot Heroes are resolved at start from human_side_players.
     let nation_count = 0;
@@ -38,17 +62,22 @@ pub fn finalize_for_start(config: &mut GameConfig, human_side_players: u32) -> b
     true
 }
 
-fn roll_human_capacity(game_mode: &str, rng: &mut impl Rng) -> u32 {
+fn roll_human_capacity(
+    game_mode: &str,
+    minimum_players: u32,
+    maximum_players: u32,
+    rng: &mut impl Rng,
+) -> u32 {
     // Square the random position so small rooms are common and large rooms are
     // possible without a fixed repeating bucket sequence.
     let position = rng.gen_range(0.0..=1.0);
-    let raw = MIN_MATCHMAKING_PLAYERS as f64
-        + (MAX_MATCHMAKING_PLAYERS - MIN_MATCHMAKING_PLAYERS) as f64 * position * position;
+    let raw =
+        minimum_players as f64 + (maximum_players - minimum_players) as f64 * position * position;
     let mut players = raw.round() as u32;
     if game_mode == "Teams" {
         players -= players % 2;
     }
-    players.clamp(MIN_MATCHMAKING_PLAYERS, MAX_MATCHMAKING_PLAYERS)
+    players.clamp(minimum_players, maximum_players)
 }
 
 #[cfg(test)]
@@ -99,6 +128,24 @@ mod tests {
                     .contains(&population.max_players)
             );
         }
+    }
+
+    #[test]
+    fn ranked_ffa_capacity_is_varied_and_keeps_sixteen_opening_slots() {
+        let mut rng = StdRng::seed_from_u64(19);
+        let mut seen = std::collections::HashSet::new();
+        for _ in 0..1_000 {
+            let population = roll_ranked_ffa(&mut rng);
+            assert!(
+                (MIN_RANKED_FFA_CAPACITY..=MAX_RANKED_FFA_CAPACITY)
+                    .contains(&population.max_players)
+            );
+            seen.insert(population.max_players);
+        }
+        assert!(
+            seen.len() > 8,
+            "ranked FFA capacity roll is not varied: {seen:?}"
+        );
     }
 
     #[test]

@@ -24,6 +24,7 @@ struct MapShaderData {
     terrain_tile_2_texture: gpu::TextureView,
     terrain_tile_3_texture: gpu::TextureView,
     skin_sampler: gpu::Sampler,
+    clock_texture: gpu::TextureView,
 }
 
 struct TabletopDraw {
@@ -55,12 +56,20 @@ pub struct MapRenderer {
     pub height: u32,
     pub terrain: Vec<u8>,
     pub owners: Vec<u16>,
-    pub conquest_flash: Vec<u8>,
-    /// Tiles with active flash intensity, for sparse decay (avoids scanning all tiles).
-    flash_active: Vec<u32>,
-    pub vision_fade: Vec<u8>,
-    fade_active: Vec<u32>,
-    is_fading: Vec<bool>,
+    /// Per-tile visual clocks (Rg32Uint): x = flash start tick (bit 31 = ability),
+    /// y = tick the tile became hidden (0 = visible, `FADE_HIDDEN_SENTINEL` = dark
+    /// from the first frame). The buffer is host-mapped, so it is also the CPU's
+    /// record of the current state; no separate mirror vec is kept.
+    pub clock_texture: gpu::Texture,
+    pub clock_view: gpu::TextureView,
+    pub clock_buffer: gpu::Buffer,
+    pub clock_bytes_per_row: u32,
+    pub dirty_clock_chunks: Vec<bool>,
+    pub flash_epoch: web_time::Instant,
+    /// Tick used by the most recent update; mirrored into `MapGlobals` for the shader.
+    pub flash_now_tick: u32,
+    /// Conquest flash length in ticks; the fragment shader fades over it.
+    pub flash_duration_ticks: f32,
     last_visible_blocks: Vec<u64>,
     pub terrain_bytes_per_row: u32,
     pub owner_bytes_per_row: u32,
@@ -68,16 +77,19 @@ pub struct MapRenderer {
     pub dirty_chunks: Vec<bool>,
     pub last_update: Option<web_time::Instant>,
     pub has_water_neighbor: Vec<bool>,
-    pub decay_accumulator: f32,
-    pub fade_decay_accumulator: f32,
     crater_reveals: CraterRevealQueue,
     revealed_scratch: Vec<u32>,
     pack_stamp: Vec<u32>,
     current_pack_stamp: u32,
 }
 
-const FLASH_ABILITY_BIT: u8 = 0x80;
-const FLASH_INTENSITY_MASK: u8 = !FLASH_ABILITY_BIT;
+/// Visual clock rate for the GPU-side flash and fog-fade decay.
+pub const FLASH_TICK_HZ: f64 = 64.0;
+/// High bit of the flash texel marks a hero-ability flash (localized shader pulse).
+const FLASH_ABILITY_BIT: u32 = 0x8000_0000;
+/// Fade texel value for a tile that was already dark on the first frame: it must
+/// not fade in when the map appears. Any real hidden tick is far below this.
+const FADE_HIDDEN_SENTINEL: u32 = u32::MAX;
 
 // Sixteen 64px columns hold the store silhouettes (styles 10-25).
 const SKIN_ATLAS_SIZE: gpu::Extent = gpu::Extent {
@@ -267,6 +279,45 @@ impl MapRenderer {
         let chunk_h = 32;
         let num_chunks = height.div_ceil(chunk_h);
 
+        // Per-tile visual clocks (Rg32Uint): x = flash start tick, y = fog hidden
+        // tick. 8 bytes per texel, rows aligned to 256 bytes. Ticks are full u32 so
+        // a tile that stays hidden for a whole match never wraps back to "visible".
+        let clock_bytes_per_row = (width * 8 + 255) & !255;
+        let clock_texture = context.create_texture(gpu::TextureDesc {
+            name: "tile_clocks",
+            format: gpu::TextureFormat::Rg32Uint,
+            size: gpu::Extent {
+                width,
+                height,
+                depth: 1,
+            },
+            dimension: gpu::TextureDimension::D2,
+            array_layer_count: 1,
+            mip_level_count: 1,
+            sample_count: 1,
+            usage: gpu::TextureUsage::COPY | gpu::TextureUsage::RESOURCE,
+            external: None,
+        });
+        let clock_view = context.create_texture_view(
+            clock_texture,
+            gpu::TextureViewDesc {
+                name: "tile_clocks_view",
+                format: gpu::TextureFormat::Rg32Uint,
+                dimension: gpu::ViewDimension::D2,
+                subresources: &gpu::TextureSubresources::default(),
+            },
+        );
+        let clock_buffer = context.create_buffer(gpu::BufferDesc {
+            name: "tile_clocks_raw",
+            size: u64::from(clock_bytes_per_row * height),
+            memory: gpu::Memory::Upload,
+        });
+        // Zero means "no flash / fully visible", which is the idle state.
+        unsafe {
+            std::ptr::write_bytes(clock_buffer.data(), 0, (clock_bytes_per_row * height) as usize)
+        };
+        context.sync_buffer(clock_buffer, 0, clock_buffer.size());
+
         Self {
             terrain_texture,
             terrain_view,
@@ -288,11 +339,14 @@ impl MapRenderer {
             height,
             terrain: initial_terrain.to_vec(),
             owners: vec![0; total],
-            conquest_flash: vec![0; total],
-            flash_active: Vec::new(),
-            vision_fade: vec![0; total],
-            fade_active: Vec::new(),
-            is_fading: vec![false; total],
+            clock_texture,
+            clock_view,
+            clock_buffer,
+            clock_bytes_per_row,
+            dirty_clock_chunks: vec![false; num_chunks as usize],
+            flash_epoch: web_time::Instant::now(),
+            flash_now_tick: 0,
+            flash_duration_ticks: 1.0,
             last_visible_blocks: Vec::new(),
             terrain_bytes_per_row,
             owner_bytes_per_row,
@@ -300,8 +354,6 @@ impl MapRenderer {
             dirty_chunks: vec![false; num_chunks as usize],
             last_update: None,
             has_water_neighbor,
-            decay_accumulator: 0.0,
-            fade_decay_accumulator: 0.0,
             crater_reveals: CraterRevealQueue::new(),
             revealed_scratch: Vec::new(),
             pack_stamp: vec![0; total],
@@ -407,6 +459,7 @@ impl MapRenderer {
     /// Upload static terrain texture once. Call after creating the command encoder.
     pub fn upload_terrain(&self, encoder: &mut gpu::CommandEncoder) {
         encoder.init_texture(self.skin_texture);
+        encoder.init_texture(self.clock_texture);
         let src_piece: gpu::BufferPiece = self.terrain_buffer.into();
         let dst_piece: gpu::TexturePiece = self.terrain_texture.into();
         let mut transfer = encoder.transfer("terrain_upload");
@@ -425,6 +478,16 @@ impl MapRenderer {
             SKIN_ATLAS_SIZE.width,
             self.skin_texture.into(),
             SKIN_ATLAS_SIZE,
+        );
+        transfer.copy_buffer_to_texture(
+            self.clock_buffer.into(),
+            self.clock_bytes_per_row,
+            self.clock_texture.into(),
+            gpu::Extent {
+                width: self.width,
+                height: self.height,
+                depth: 1,
+            },
         );
     }
 
@@ -510,23 +573,12 @@ impl MapRenderer {
         force_full_upload: bool,
     ) {
         let now = web_time::Instant::now();
-        let dt = match self.last_update {
-            Some(last) => now.duration_since(last).as_secs_f32(),
-            None => 0.016,
-        };
         self.last_update = Some(now);
-
-        // Scale decay based on elapsed time so it completes in exactly `conquest_duration` seconds on all frame rates.
-        let decay_rate = if conquest_duration > 0.0 {
-            f32::from(FLASH_INTENSITY_MASK) / conquest_duration
-        } else {
-            f32::from(FLASH_INTENSITY_MASK) / 3.0
-        };
-        self.decay_accumulator += dt * decay_rate;
-        let decay_amount = self.decay_accumulator.floor() as u32;
-        if decay_amount > 0 {
-            self.decay_accumulator -= decay_amount as f32;
-        }
+        let now_tick = self.tick_at(now);
+        self.flash_now_tick = now_tick;
+        // The shader fades a flash over this many ticks of the shared clock.
+        self.flash_duration_ticks =
+            (conquest_duration.max(0.05) * FLASH_TICK_HZ as f32).clamp(1.0, 30_000.0);
 
         let total = (self.width * self.height) as usize;
         let u32_per_row = self.owner_bytes_per_row / 4;
@@ -538,13 +590,20 @@ impl MapRenderer {
         let dst_ptr = self.owner_buffer.data();
         let slice = unsafe { std::slice::from_raw_parts_mut(dst_ptr as *mut u32, total_u32) };
 
-        // Helper: pack owner + flash + border/water/fog flags into the GPU buffer.
-        // Uses visual owners only while an expanding nuke crater is active (0 idle cost).
+        // Host-mapped visual-clock buffer: 2 u32 per tile (flash start, fog hidden).
+        let clock_u32_per_row = self.clock_bytes_per_row / 4;
+        let clock_total_u32 = (clock_u32_per_row * height) as usize;
+        let clock = unsafe {
+            std::slice::from_raw_parts_mut(self.clock_buffer.data() as *mut u32, clock_total_u32)
+        };
+
+        // Pack owner + border/water flags into the GPU buffer. Flash and fog fade
+        // live in their own textures, so a tile that is merely darkening is never
+        // repacked or re-uploaded. Uses visual owners only while a nuke crater is
+        // expanding (0 idle cost).
         let pack = |slice: &mut [u32],
                     owners: &[u16],
                     crater_reveals: &CraterRevealQueue,
-                    flash: &[u8],
-                    fade: u8,
                     tile_idx: u32,
                     has_water: bool| {
             let i = tile_idx as usize;
@@ -566,15 +625,13 @@ impl MapRenderer {
                 (owners[i], compute_has_border(tile_idx, owners, width, height))
             };
 
-            let mut val = owner as u32 | ((flash[i] as u32) << 16);
+            let mut val = owner as u32;
             if has_border {
                 val |= 1 << 24;
             }
             if has_water {
                 val |= 1 << 25;
             }
-            let fade_6bit = (fade >> 2) as u32; // scale 0..255 to 0..63
-            val |= fade_6bit << 26;
             slice[dst] = val;
         };
 
@@ -598,11 +655,15 @@ impl MapRenderer {
                 if !held_for_crater
                     && conquest_involves_player(old_owner, dt.new_owner, my_player_id)
                 {
-                    start_tile_flash(
-                        &mut self.conquest_flash,
-                        &mut self.flash_active,
+                    start_flash_at(
+                        clock,
+                        clock_u32_per_row,
+                        &mut self.dirty_clock_chunks,
                         dt.index,
+                        now_tick,
                         false,
+                        chunk_h,
+                        width,
                     );
                 }
                 self.owners[i] = dt.new_owner;
@@ -612,90 +673,71 @@ impl MapRenderer {
         self.crater_reveals
             .advance(now, width, &mut self.revealed_scratch);
 
-        // 1. Reset chunk tracking
+        // 1. Reset owner chunk tracking. Flash/fade chunks stay dirty until their
+        //    upload runs, so an ability flash set between frames is not lost.
         self.dirty_chunks.fill(false);
 
-        // 2. Update vision fade targets based on visibility:
-        //    - Init or FoW toggle runs a full pass and uploads the full owner texture.
-        //    - Normal frames diff `visible.blocks` against `last_visible_blocks` via XOR.
-        let mut any_fade_changed = false;
+        // 2. Vision: only the fade clock changes, so the owner texture is untouched.
         let full_vis_upload =
             force_full_upload || self.last_visible_blocks.len() != visible.blocks.len();
-        {
-            let owners = &self.owners;
-            let crater_reveals = &self.crater_reveals;
-            let conquest_flash = &self.conquest_flash;
-            let vision_fade = &mut self.vision_fade;
-            let is_fading = &mut self.is_fading;
-            let fade_active = &mut self.fade_active;
-            let dirty_chunks = &mut self.dirty_chunks;
-            let mut apply_vis_tile = |tile_idx: u32, is_vis: bool| {
-                let i = tile_idx as usize;
-                let current_fade = vision_fade[i];
-                if is_vis {
-                    if current_fade < 255 {
-                        vision_fade[i] = 255;
-                        is_fading[i] = false;
-                        pack(
-                            slice,
-                            owners,
-                            crater_reveals,
-                            conquest_flash,
-                            255,
-                            tile_idx,
-                            has_water[i],
-                        );
-                        let y = tile_idx / width;
-                        dirty_chunks[(y / chunk_h) as usize] = true;
-                        any_fade_changed = true;
-                    }
-                } else if current_fade > 0 && !is_fading[i] {
-                    is_fading[i] = true;
-                    fade_active.push(tile_idx);
+        let initial_vis = self.last_visible_blocks.is_empty();
+        if full_vis_upload {
+            for tile_idx in 0..total as u32 {
+                set_tile_visibility(
+                    clock,
+                    clock_u32_per_row,
+                    &mut self.dirty_clock_chunks,
+                    tile_idx,
+                    visible.contains(tile_idx),
+                    now_tick,
+                    initial_vis,
+                    chunk_h,
+                    width,
+                );
+            }
+            self.last_visible_blocks.resize(visible.blocks.len(), 0);
+            self.last_visible_blocks.copy_from_slice(&visible.blocks);
+        } else {
+            for (block_idx, (&new_word, old_word)) in visible
+                .blocks
+                .iter()
+                .zip(self.last_visible_blocks.iter_mut())
+                .enumerate()
+            {
+                let mut diff = new_word ^ *old_word;
+                if diff == 0 {
+                    continue;
                 }
-            };
-
-            if full_vis_upload {
-                for tile_idx in 0..total as u32 {
-                    apply_vis_tile(tile_idx, visible.contains(tile_idx));
-                }
-                self.last_visible_blocks.resize(visible.blocks.len(), 0);
-                self.last_visible_blocks.copy_from_slice(&visible.blocks);
-            } else {
-                for (block_idx, (&new_word, old_word)) in visible
-                    .blocks
-                    .iter()
-                    .zip(self.last_visible_blocks.iter_mut())
-                    .enumerate()
-                {
-                    let mut diff = new_word ^ *old_word;
-                    if diff == 0 {
-                        continue;
+                *old_word = new_word;
+                let base_tile = (block_idx as u32) * 64;
+                while diff != 0 {
+                    let bit = diff.trailing_zeros();
+                    diff &= diff - 1;
+                    let tile_idx = base_tile + bit;
+                    if tile_idx >= total as u32 {
+                        break;
                     }
-                    *old_word = new_word;
-                    let base_tile = (block_idx as u32) * 64;
-                    while diff != 0 {
-                        let bit = diff.trailing_zeros();
-                        diff &= diff - 1;
-                        let tile_idx = base_tile + bit;
-                        if tile_idx >= total as u32 {
-                            break;
-                        }
-                        apply_vis_tile(tile_idx, ((new_word >> bit) & 1) != 0);
-                    }
+                    set_tile_visibility(
+                        clock,
+                        clock_u32_per_row,
+                        &mut self.dirty_clock_chunks,
+                        tile_idx,
+                        ((new_word >> bit) & 1) != 0,
+                        now_tick,
+                        false,
+                        chunk_h,
+                        width,
+                    );
                 }
             }
         }
 
         if full_vis_upload {
             for tile_idx in 0..total as u32 {
-                let fade = self.vision_fade[tile_idx as usize];
                 pack(
                     slice,
                     &self.owners,
                     &self.crater_reveals,
-                    &self.conquest_flash,
-                    fade,
                     tile_idx,
                     has_water[tile_idx as usize],
                 );
@@ -703,99 +745,38 @@ impl MapRenderer {
             context.sync_buffer(self.owner_buffer, 0, self.owner_buffer.size());
             let src_piece: gpu::BufferPiece = self.owner_buffer.into();
             let dst_piece: gpu::TexturePiece = self.owner_texture.into();
-            let mut transfer = encoder.transfer("owner_upload_full");
-            transfer.copy_buffer_to_texture(
-                src_piece,
-                self.owner_bytes_per_row,
-                dst_piece,
-                gpu::Extent {
-                    width: self.width,
-                    height: self.height,
-                    depth: 1,
-                },
+            {
+                let mut transfer = encoder.transfer("owner_upload_full");
+                transfer.copy_buffer_to_texture(
+                    src_piece,
+                    self.owner_bytes_per_row,
+                    dst_piece,
+                    gpu::Extent {
+                        width: self.width,
+                        height: self.height,
+                        depth: 1,
+                    },
+                );
+            }
+            upload_rows(
+                context,
+                encoder,
+                &mut self.dirty_clock_chunks,
+                self.clock_buffer,
+                self.clock_texture,
+                width,
+                height,
+                chunk_h,
+                self.clock_bytes_per_row,
+                8,
+                "clock_upload",
             );
             return;
         }
 
-        // 3. Decay existing flash (sparse — only active entries)
-        let mut decay_dirty = false;
-        if decay_amount > 0 {
-            self.flash_active.retain(|&tile_idx| {
-                let i = tile_idx as usize;
-                if i >= total {
-                    return false;
-                }
-                self.conquest_flash[i] = decay_tile_flash(self.conquest_flash[i], decay_amount);
-                let intensity = self.conquest_flash[i] & FLASH_INTENSITY_MASK;
-                let fade = self.vision_fade[i];
-                pack(
-                    slice,
-                    &self.owners,
-                    &self.crater_reveals,
-                    &self.conquest_flash,
-                    fade,
-                    tile_idx,
-                    has_water[i],
-                );
-                let y = tile_idx / width;
-                self.dirty_chunks[(y / chunk_h) as usize] = true;
-                decay_dirty = true;
-                intensity > 0
-            });
-        }
-
-        // 4. Decay vision active fades (smoothly over 1.5 seconds)
-        let fade_decay_rate = 170.0;
-        self.fade_decay_accumulator += dt * fade_decay_rate;
-        let fade_decay_amount = self.fade_decay_accumulator.floor() as u32;
-        if fade_decay_amount > 0 {
-            self.fade_decay_accumulator -= fade_decay_amount as f32;
-        }
-
-        let mut fade_dirty = false;
-        if fade_decay_amount > 0 && !self.fade_active.is_empty() {
-            let has_water = &self.has_water_neighbor;
-            let vision_fade = &mut self.vision_fade;
-            let is_fading = &mut self.is_fading;
-            let owners = &self.owners;
-            let crater_reveals = &self.crater_reveals;
-            let conquest_flash = &self.conquest_flash;
-            let dirty_chunks = &mut self.dirty_chunks;
-
-            self.fade_active.retain(|&tile_idx| {
-                let i = tile_idx as usize;
-                if i >= total {
-                    return false;
-                }
-                if !is_fading[i] {
-                    return false; // Remove immediately since it became visible again
-                }
-                let f = vision_fade[i].saturating_sub(fade_decay_amount.min(255) as u8);
-                vision_fade[i] = f;
-                pack(
-                    slice,
-                    owners,
-                    crater_reveals,
-                    conquest_flash,
-                    f,
-                    tile_idx,
-                    has_water[i],
-                );
-                let y = tile_idx / width;
-                dirty_chunks[(y / chunk_h) as usize] = true;
-                fade_dirty = true;
-                let keep = f > 0;
-                if !keep {
-                    is_fading[i] = false;
-                }
-                keep
-            });
-        }
-
-        // 5. Pack new dirty tiles (skipping crater tiles still waiting for the blast front)
+        // 3. Pack new dirty tiles (skipping crater tiles still waiting for the blast front)
         //    plus any crater tiles newly uncovered this frame, and their 8 neighbors.
         //    Stamp tiles so interior cells touched by multiple neighbors pack at most once.
-        let mut any_tile_packed = false;
         if !dirty_tiles.is_empty() || !self.revealed_scratch.is_empty() {
             self.current_pack_stamp = self.current_pack_stamp.wrapping_add(1);
             if self.current_pack_stamp == 0 {
@@ -811,13 +792,10 @@ impl MapRenderer {
                 }
                 if pack_stamp[i] != stamp {
                     pack_stamp[i] = stamp;
-                    let fade = self.vision_fade[i];
                     pack(
                         slice,
                         &self.owners,
                         &self.crater_reveals,
-                        &self.conquest_flash,
-                        fade,
                         tile_idx,
                         self.has_water_neighbor[i],
                     );
@@ -831,13 +809,10 @@ impl MapRenderer {
                         let ni = n_idx as usize;
                         if pack_stamp[ni] != stamp {
                             pack_stamp[ni] = stamp;
-                            let n_fade = self.vision_fade[ni];
                             pack(
                                 slice,
                                 &self.owners,
                                 &self.crater_reveals,
-                                &self.conquest_flash,
-                                n_fade,
                                 n_idx,
                                 self.has_water_neighbor[ni],
                             );
@@ -853,71 +828,72 @@ impl MapRenderer {
                     continue;
                 }
                 pack_with_neighbors(dt.index, &mut self.dirty_chunks);
-                any_tile_packed = true;
             }
             for &tile_idx in &self.revealed_scratch {
                 pack_with_neighbors(tile_idx, &mut self.dirty_chunks);
-                any_tile_packed = true;
             }
         }
 
-        if !any_tile_packed && !decay_dirty && !fade_dirty && !any_fade_changed {
-            return;
-        }
-
-        // Upload dirty chunks
-        let num_chunks = self.dirty_chunks.len();
-        let mut start_chunk = None;
-
-        let mut upload_range = |start: usize, end: usize| {
-            let min_y = (start as u32) * self.chunk_h;
-            let max_y = (((end as u32) + 1) * self.chunk_h - 1).min(self.height - 1);
-
-            let offset_bytes = (min_y * self.owner_bytes_per_row) as u64;
-            let size_bytes =
-                ((max_y - min_y) * self.owner_bytes_per_row) as u64 + self.width as u64 * 4;
-
-            context.sync_buffer(self.owner_buffer, offset_bytes, size_bytes);
-
-            let src_piece: gpu::BufferPiece = self.owner_buffer.at(offset_bytes);
-            let mut dst_piece: gpu::TexturePiece = self.owner_texture.into();
-            dst_piece.origin = [0, min_y, 0];
-
-            let mut transfer = encoder.transfer("owner_upload");
-            transfer.copy_buffer_to_texture(
-                src_piece,
-                self.owner_bytes_per_row,
-                dst_piece,
-                gpu::Extent {
-                    width: self.width,
-                    height: max_y - min_y + 1,
-                    depth: 1,
-                },
-            );
-        };
-
-        for i in 0..num_chunks {
-            if self.dirty_chunks[i] {
-                if start_chunk.is_none() {
-                    start_chunk = Some(i);
-                }
-            } else if let Some(start) = start_chunk {
-                upload_range(start, i - 1);
-                start_chunk = None;
-            }
-        }
-        if let Some(start) = start_chunk {
-            upload_range(start, num_chunks - 1);
-        }
+        // Upload the chunks each texture actually dirtied. A frame where only a
+        // flash is fading uploads 2 bytes per tile instead of a repacked owner row.
+        upload_rows(
+            context,
+            encoder,
+            &mut self.dirty_chunks,
+            self.owner_buffer,
+            self.owner_texture,
+            width,
+            height,
+            chunk_h,
+            self.owner_bytes_per_row,
+            4,
+            "owner_upload",
+        );
+        upload_rows(
+            context,
+            encoder,
+            &mut self.dirty_clock_chunks,
+            self.clock_buffer,
+            self.clock_texture,
+            width,
+            height,
+            chunk_h,
+            self.clock_bytes_per_row,
+            8,
+            "clock_upload",
+        );
     }
 
-    /// Starts the existing per-tile flash channel for a locally visible hero ability.
+    /// Monotonic 64 Hz tick shared with the fragment shader's decay. Full u32 so a
+    /// tile hidden for a whole match never wraps back to "visible".
+    fn tick_at(&self, now: web_time::Instant) -> u32 {
+        let secs = now.duration_since(self.flash_epoch).as_secs_f64();
+        (secs * FLASH_TICK_HZ) as u32
+    }
+
+    /// Starts the per-tile flash for a locally visible hero ability.
     pub fn flash_ability_tile(&mut self, x: u32, y: u32) {
         if x >= self.width || y >= self.height {
             return;
         }
         let tile = y * self.width + x;
-        start_tile_flash(&mut self.conquest_flash, &mut self.flash_active, tile, true);
+        let now_tick = self.tick_at(web_time::Instant::now());
+        self.flash_now_tick = now_tick;
+        let clock_u32_per_row = self.clock_bytes_per_row / 4;
+        let clock_total_u32 = (clock_u32_per_row * self.height) as usize;
+        let clock = unsafe {
+            std::slice::from_raw_parts_mut(self.clock_buffer.data() as *mut u32, clock_total_u32)
+        };
+        start_flash_at(
+            clock,
+            clock_u32_per_row,
+            &mut self.dirty_clock_chunks,
+            tile,
+            now_tick,
+            true,
+            self.chunk_h,
+            self.width,
+        );
     }
 
     pub fn draw(
@@ -970,6 +946,7 @@ impl MapRenderer {
                 terrain_tile_2_texture: terrain_tile_view(2),
                 terrain_tile_3_texture: terrain_tile_view(3),
                 skin_sampler: self.skin_sampler,
+                clock_texture: self.clock_view,
             },
         );
         if let Some(draw) = tabletop {
@@ -992,6 +969,9 @@ impl MapRenderer {
         render_ctx.context.destroy_texture_view(self.owner_view);
         render_ctx.context.destroy_texture(self.owner_texture);
         render_ctx.context.destroy_buffer(self.owner_buffer);
+        render_ctx.context.destroy_texture_view(self.clock_view);
+        render_ctx.context.destroy_texture(self.clock_texture);
+        render_ctx.context.destroy_buffer(self.clock_buffer);
         render_ctx.context.destroy_texture_view(self.skin_view);
         render_ctx.context.destroy_texture(self.skin_texture);
         render_ctx.context.destroy_buffer(self.skin_buffer);
@@ -1015,18 +995,115 @@ fn conquest_involves_player(old_owner: u16, new_owner: u16, my_player_id: u16) -
     my_player_id != 0 && (old_owner == my_player_id || new_owner == my_player_id)
 }
 
-/// Starts one flash per tile; the high bit marks skill flashes for localized shader pulses.
-fn start_tile_flash(flashes: &mut [u8], flash_active: &mut Vec<u32>, tile: u32, ability: bool) {
-    let i = tile as usize;
-    if (flashes[i] & FLASH_INTENSITY_MASK) == 0 {
-        flash_active.push(tile);
-    }
-    flashes[i] = FLASH_INTENSITY_MASK | if ability { FLASH_ABILITY_BIT } else { 0 };
+/// Records the 64 Hz tick a conquest or ability flash started on this tile.
+/// The fragment shader turns the age into intensity, so nothing has to revisit
+/// the tile again while the flash fades out. Writes the flash (x) channel.
+#[allow(clippy::too_many_arguments)]
+fn start_flash_at(
+    clock: &mut [u32],
+    u32_per_row: u32,
+    dirty_chunks: &mut [bool],
+    tile: u32,
+    tick: u32,
+    ability: bool,
+    chunk_h: u32,
+    width: u32,
+) {
+    let dst = ((tile / width) * u32_per_row + (tile % width) * 2) as usize;
+    clock[dst] = tick.max(1) | if ability { FLASH_ABILITY_BIT } else { 0 };
+    dirty_chunks[((tile / width) / chunk_h) as usize] = true;
 }
 
-fn decay_tile_flash(flash: u8, amount: u32) -> u8 {
-    (flash & FLASH_ABILITY_BIT)
-        | (flash & FLASH_INTENSITY_MASK)
-            .saturating_sub(amount.min(u32::from(FLASH_INTENSITY_MASK)) as u8)
+/// Records when a tile became hidden so the shader can fade the fog of war.
+/// Only transitions touch the texture; a tile that stays hidden keeps its start.
+/// Writes the fade (y) channel. `initial` marks the first visibility pass, where
+/// already-dark tiles get the sentinel so they do not fade in with the map.
+#[allow(clippy::too_many_arguments)]
+fn set_tile_visibility(
+    clock: &mut [u32],
+    u32_per_row: u32,
+    dirty_chunks: &mut [bool],
+    tile: u32,
+    visible: bool,
+    tick: u32,
+    initial: bool,
+    chunk_h: u32,
+    width: u32,
+) {
+    let dst = ((tile / width) * u32_per_row + (tile % width) * 2 + 1) as usize;
+    let prev = clock[dst];
+    let new = if visible {
+        0
+    } else if prev != 0 {
+        return; // already hidden: keep its original start tick
+    } else if initial {
+        FADE_HIDDEN_SENTINEL
+    } else {
+        tick.max(1)
+    };
+    if prev == new {
+        return;
+    }
+    clock[dst] = new;
+    dirty_chunks[((tile / width) / chunk_h) as usize] = true;
+}
+
+/// Uploads only the row chunks marked dirty, then clears the marks.
+#[allow(clippy::too_many_arguments)]
+fn upload_rows(
+    context: &gpu::Context,
+    encoder: &mut gpu::CommandEncoder,
+    dirty_chunks: &mut [bool],
+    buffer: gpu::Buffer,
+    texture: gpu::Texture,
+    width: u32,
+    height: u32,
+    chunk_h: u32,
+    bytes_per_row: u32,
+    bytes_per_texel: u32,
+    label: &str,
+) {
+    let num_chunks = dirty_chunks.len();
+    let mut start_chunk = None;
+    let mut upload_range = |start: usize, end: usize| {
+        let min_y = (start as u32) * chunk_h;
+        let max_y = (((end as u32) + 1) * chunk_h - 1).min(height - 1);
+        let offset_bytes = u64::from(min_y * bytes_per_row);
+        let size_bytes = u64::from((max_y - min_y) * bytes_per_row)
+            + u64::from(width) * u64::from(bytes_per_texel);
+
+        context.sync_buffer(buffer, offset_bytes, size_bytes);
+
+        let src_piece: gpu::BufferPiece = buffer.at(offset_bytes);
+        let mut dst_piece: gpu::TexturePiece = texture.into();
+        dst_piece.origin = [0, min_y, 0];
+
+        let mut transfer = encoder.transfer(label);
+        transfer.copy_buffer_to_texture(
+            src_piece,
+            bytes_per_row,
+            dst_piece,
+            gpu::Extent {
+                width,
+                height: max_y - min_y + 1,
+                depth: 1,
+            },
+        );
+    };
+
+    for i in 0..num_chunks {
+        if dirty_chunks[i] {
+            if start_chunk.is_none() {
+                start_chunk = Some(i);
+            }
+        } else if let Some(start) = start_chunk {
+            upload_range(start, i - 1);
+            start_chunk = None;
+        }
+    }
+    if let Some(start) = start_chunk {
+        upload_range(start, num_chunks - 1);
+    }
+    dirty_chunks.fill(false);
 }
 

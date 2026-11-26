@@ -89,11 +89,32 @@ impl SowEngine {
         }
 
         let batteries: Vec<_> = self.buildings.iter().copied()
-            .filter(|b| b.kind == BuildingKind::SAM && self.nuclear_charges(b.id, b.active_level()) > 0)
+            .filter_map(|b| {
+                let active_level = b.active_level();
+                let (charges_cap, range) = if b.kind == BuildingKind::Tower && active_level >= 5 {
+                    let mult = self
+                        .state
+                        .player(b.owner_id)
+                        .map_or(1.0, |p| p.leader.tower_range_multiplier());
+                    let r = crate::building::tower_range_for_level(
+                        active_level,
+                        &self.state.config,
+                        mult,
+                    )
+                    .max(0) as u32;
+                    (active_level.saturating_sub(4), r)
+                } else if b.kind == BuildingKind::SAM && active_level > 0 {
+                    (active_level, sam_range(active_level) as u32)
+                } else {
+                    return None;
+                };
+                let charges = self.nuclear_charges(b.id, charges_cap);
+                (charges > 0 && range > 0).then_some((b, charges, range))
+            })
             .collect();
         let mut shots = Vec::new();
         let mut reloads = Vec::new();
-        for battery in batteries {
+        for (battery, charges, range) in batteries {
             let mut candidates = Vec::new();
             for target in targets.values() {
                 if intercepted.contains(&target.id) || reserved.contains(&target.id)
@@ -103,7 +124,6 @@ impl SowEngine {
                     continue;
                 }
                 let ProjectileKind::Nuke { level } = target.kind else { continue };
-                let range = sam_range(battery.active_level()) as u32;
                 let stride = usize::from(target.steps_per_tick.max(1));
                 let horizon = range.div_ceil(u32::from(SAM_STEPS_PER_TICK)) as usize;
                 let future = target.path.iter().skip(target.path_cursor).step_by(stride).take(horizon + 1);
@@ -115,8 +135,7 @@ impl SowEngine {
                 }
             }
             candidates.sort_unstable();
-            for &(_, travel, target_id, tile) in candidates.iter()
-                .take(usize::from(self.nuclear_charges(battery.id, battery.active_level())))
+            for &(_, travel, target_id, tile) in candidates.iter().take(usize::from(charges))
             {
                 reserved.insert(target_id);
                 reloads.push(battery.id);

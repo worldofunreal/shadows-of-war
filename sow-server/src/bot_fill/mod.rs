@@ -1,4 +1,4 @@
-//! Fictional humans — internal bot fill for Matchmaking lobbies.
+//! Fictional humans — internal bot fill for Matchmaking and Ranked FFA lobbies.
 //!
 //! ══════════════════════════════════════════════════════════════════════
 //! MENTAL MODEL — read this before touching ANYTHING in this module.
@@ -46,7 +46,7 @@
 
 pub mod names;
 
-use crate::lobby::{LOBBY_COUNTDOWN_SECS, LobbyPhase, PlayerConnection, ServerLobby};
+use crate::lobby::{LOBBY_COUNTDOWN_SECS, LobbyPhase, PlayerConnection, ServerLobby, TICK_SECS};
 use rand::Rng;
 use sow_core::player::Leader;
 use sow_core::protocol::{LobbyKind, Team};
@@ -183,6 +183,43 @@ impl BotPool {
         }
         out
     }
+
+    /// Select fresh persistent identities, excluding accounts and display
+    /// names already present in this lobby. Used when Ranked FFA needs to
+    /// replenish a seat after a player leaves during preparation.
+    fn take_excluding(
+        &self,
+        count: usize,
+        used_ids: &std::collections::HashSet<String>,
+        used_names: &std::collections::HashSet<String>,
+        rng: &mut impl Rng,
+    ) -> Vec<BotPoolEntry> {
+        if count == 0 || self.entries.is_empty() {
+            return Vec::new();
+        }
+        let mut indices: Vec<usize> = (0..self.entries.len()).collect();
+        for i in 0..indices.len() {
+            let j = rng.gen_range(i..indices.len());
+            indices.swap(i, j);
+        }
+
+        let mut selected = Vec::with_capacity(count);
+        let mut ids = used_ids.clone();
+        let mut names = used_names.clone();
+        for index in indices {
+            let entry = &self.entries[index];
+            if ids.contains(&entry.account_id) || names.contains(&entry.display_name) {
+                continue;
+            }
+            ids.insert(entry.account_id.clone());
+            names.insert(entry.display_name.clone());
+            selected.push(entry.clone());
+            if selected.len() == count {
+                break;
+            }
+        }
+        selected
+    }
 }
 
 // ── Independent-moment placement ──────────────────────────────────────────
@@ -222,7 +259,7 @@ pub fn inject_internal_bots(games: &mut [ServerLobby]) {
         .unwrap_or(0.92);
 
     for g in games.iter_mut() {
-        if g.kind != LobbyKind::Matchmaking {
+        if !matches!(g.kind, LobbyKind::Matchmaking | LobbyKind::RankedFFA) {
             continue;
         }
         if g.phase != LobbyPhase::CountingDown {
@@ -238,7 +275,15 @@ pub fn inject_internal_bots(games: &mut [ServerLobby]) {
         if g.bot_fill_target.is_none() {
             let mut rng = rand::thread_rng();
             let pct = rng.gen_range(min_pct..=max_pct);
-            let target = ((max as f32) * pct).round() as usize;
+            let mut target = ((max as f32) * pct).round() as usize;
+            if g.kind == LobbyKind::RankedFFA {
+                // Ranked FFA must start with at least sixteen entrants, while
+                // keeping bot fill below lobby capacity so human arrivals
+                // still have room to join during the countdown.
+                target = target
+                    .max(crate::matchmaking_population::MIN_RANKED_FFA_PARTICIPANTS as usize)
+                    .min(max.saturating_sub(1));
+            }
             let identities: Vec<BotPoolEntry> = match BotPool::get() {
                 Some(pool) if !pool.is_empty() => pool.take(target, &mut rng),
                 _ => {
@@ -279,7 +324,7 @@ pub fn inject_internal_bots(games: &mut [ServerLobby]) {
         let target = g.bot_fill_target.unwrap_or(0);
         let bots_desired = target.saturating_sub(external_players);
         let bots_needed_now = bots_desired.saturating_sub(bots);
-        if g.pending_bots.len() > bots_needed_now {
+        if g.kind == LobbyKind::Matchmaking && g.pending_bots.len() > bots_needed_now {
             g.pending_bots.truncate(bots_needed_now);
         }
 
@@ -287,12 +332,50 @@ pub fn inject_internal_bots(games: &mut [ServerLobby]) {
         // Sorted ascending by join_at_elapsed, so partition_point + drain
         // pops exactly the due ones in O(log n) + O(due). Nothing is drawn
         // here — the moments were all decided at lobby birth.
-        let elapsed = (LOBBY_COUNTDOWN_SECS - g.countdown_secs).max(0.0);
+        let elapsed = if g.kind == LobbyKind::RankedFFA && g.countdown_secs <= TICK_SECS {
+            LOBBY_COUNTDOWN_SECS
+        } else {
+            (LOBBY_COUNTDOWN_SECS - g.countdown_secs).max(0.0)
+        };
+        if g.kind == LobbyKind::RankedFFA && g.pending_bots.len() < bots_needed_now {
+            if let Some(pool) = BotPool::get() {
+                let used_ids: std::collections::HashSet<String> = g
+                    .players
+                    .iter()
+                    .filter_map(|player| player.database_account_id.clone())
+                    .chain(g.pending_bots.iter().map(|(id, _, _)| id.clone()))
+                    .collect();
+                let used_names: std::collections::HashSet<String> = g
+                    .players
+                    .iter()
+                    .map(|player| player.name.clone())
+                    .chain(g.pending_bots.iter().map(|(_, name, _)| name.clone()))
+                    .collect();
+                let missing = bots_needed_now - g.pending_bots.len();
+                let mut rng = rand::thread_rng();
+                let refill = pool.take_excluding(missing, &used_ids, &used_names, &mut rng);
+                g.pending_bots.extend(refill.into_iter().map(|entry| {
+                    (
+                        entry.account_id,
+                        entry.display_name,
+                        rng.gen_range(elapsed..=LOBBY_COUNTDOWN_SECS),
+                    )
+                }));
+                g.pending_bots
+                    .sort_by(|a, b| a.2.partial_cmp(&b.2).unwrap_or(std::cmp::Ordering::Equal));
+            }
+        }
         let split = g.pending_bots.partition_point(|(_, _, t)| *t <= elapsed);
         if split == 0 {
             continue;
         }
-        let due: Vec<(String, String, f32)> = g.pending_bots.drain(..split).collect();
+        let due_count = split
+            .min(bots_needed_now)
+            .min(max.saturating_sub(g.players.len()));
+        if due_count == 0 {
+            continue;
+        }
+        let due: Vec<(String, String, f32)> = g.pending_bots.drain(..due_count).collect();
 
         let mut rng = rand::thread_rng();
         let mut pushed = false;
@@ -302,7 +385,9 @@ pub fn inject_internal_bots(games: &mut [ServerLobby]) {
         {
             // League is read at this ghost's entry, so humans already in the
             // lobby decide its animal alias share, not the lobby's state at first sighting.
-            let name = if animal_alias_chance(live_league_score(&g.players), &mut rng) {
+            let name = if g.kind == LobbyKind::Matchmaking
+                && animal_alias_chance(live_league_score(&g.players), &mut rng)
+            {
                 fresh_animal_name(
                     &|candidate| {
                         g.players.iter().any(|p| p.name == candidate)
@@ -394,7 +479,7 @@ pub fn inject_internal_bots(games: &mut [ServerLobby]) {
 
 #[cfg(test)]
 mod tests {
-    use super::{animal_alias_band, animal_alias_chance, fresh_animal_name};
+    use super::{BotPool, BotPoolEntry, animal_alias_band, animal_alias_chance, fresh_animal_name};
     use rand::{SeedableRng, rngs::StdRng};
     use std::collections::HashSet;
 
@@ -428,5 +513,36 @@ mod tests {
             assert!(suffix.bytes().all(|byte| byte.is_ascii_digit()));
             taken.insert(name);
         }
+    }
+
+    #[test]
+    fn ranked_ffa_refill_uses_new_persistent_accounts_and_names() {
+        let pool = BotPool::new(
+            (0..8)
+                .map(|index| BotPoolEntry {
+                    account_id: format!("bot-{index}"),
+                    display_name: format!("Ghost {index}"),
+                })
+                .collect(),
+        );
+        let used_ids = ["bot-0".to_string()].into_iter().collect();
+        let used_names = ["Ghost 1".to_string()].into_iter().collect();
+        let mut rng = StdRng::seed_from_u64(13);
+
+        let selected = pool.take_excluding(5, &used_ids, &used_names, &mut rng);
+        let ids: HashSet<_> = selected
+            .iter()
+            .map(|entry| entry.account_id.as_str())
+            .collect();
+        let names: HashSet<_> = selected
+            .iter()
+            .map(|entry| entry.display_name.as_str())
+            .collect();
+
+        assert_eq!(selected.len(), 5);
+        assert_eq!(ids.len(), selected.len());
+        assert_eq!(names.len(), selected.len());
+        assert!(!ids.contains("bot-0"));
+        assert!(!names.contains("Ghost 1"));
     }
 }

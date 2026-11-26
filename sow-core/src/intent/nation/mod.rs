@@ -13,6 +13,15 @@ mod structures;
 use profile::{AiSlot, BotDecision, ai_profile_for, ai_tier};
 use structures::{cheapest_gold_cost, think_window_ticks};
 
+#[derive(Default)]
+pub(super) struct AiTickShared {
+    pub(super) silo_owners: Vec<u16>,
+    pub(super) city_owners: Vec<u16>,
+    pub(super) alive_homes: Vec<(u16, u32, u32)>,
+    pub(super) prey_by_comp: std::collections::HashMap<u32, Vec<(u64, u16, u32, bool)>>,
+    pub(super) buildings_by_owner: Vec<Vec<usize>>,
+}
+
 impl SowEngine {
     fn rebuild_ai_attack_index(&mut self) {
         if !self.ai_attack_index_dirty
@@ -172,9 +181,67 @@ impl SowEngine {
             self.refresh_building_aggregates();
         }
         let num_lookup = self.state.player_lookup.len();
+        let mut shared = AiTickShared {
+            silo_owners: Vec::new(),
+            city_owners: Vec::new(),
+            alive_homes: Vec::new(),
+            prey_by_comp: std::collections::HashMap::new(),
+            buildings_by_owner: if any_structures || any_attacks {
+                vec![Vec::new(); num_lookup]
+            } else {
+                Vec::new()
+            },
+        };
         let mut alive_warships_by_player: Vec<bool> = Vec::new();
         let mut owned_warships_by_player: Vec<u32> = Vec::new();
         let mut queued_warships_by_player: Vec<u32> = Vec::new();
+        if any_attacks {
+            queued_warships_by_player.resize(num_lookup, 0);
+        }
+        if any_structures || any_attacks {
+            let mut seen_silo = std::collections::HashSet::new();
+            let mut seen_city = std::collections::HashSet::new();
+            let check_productions = any_attacks && !self.building_productions.is_empty();
+            for (idx, b) in self.buildings.iter().enumerate() {
+                let pid = usize::from(b.owner_id);
+                if pid < num_lookup {
+                    shared.buildings_by_owner[pid].push(idx);
+                    if check_productions
+                        && let Some(state) = self.building_productions.get(&b.id)
+                    {
+                        let queued = state.warship_queue_len() as u32;
+                        if queued > 0 {
+                            queued_warships_by_player[pid] =
+                                queued_warships_by_player[pid].saturating_add(queued);
+                        }
+                    }
+                }
+                if any_structures {
+                    let is_nuke_ready = !b.under_construction
+                        && ((b.kind == crate::game::BuildingKind::MilitaryCamp
+                            && b.active_level() >= 5)
+                            || (self.legacy_building_rules
+                                && b.kind == crate::game::BuildingKind::MissileSilo
+                                && b.active_level() > 0));
+                    if is_nuke_ready && seen_silo.insert(b.owner_id) {
+                        shared.silo_owners.push(b.owner_id);
+                    } else if b.kind == crate::game::BuildingKind::City
+                        && seen_city.insert(b.owner_id)
+                    {
+                        shared.city_owners.push(b.owner_id);
+                    }
+                }
+            }
+        }
+        if any_structures {
+            for p in &self.state.players {
+                if p.alive
+                    && let Some((hx, hy)) = p.home
+                {
+                    shared.alive_homes.push((p.id, hx, hy));
+                }
+            }
+        }
         if any_attacks {
             self.refresh_bot_naval_slots_used();
             self.bot_naval_cursors
@@ -182,7 +249,6 @@ impl SowEngine {
 
             alive_warships_by_player.resize(num_lookup, false);
             owned_warships_by_player.resize(num_lookup, 0);
-            queued_warships_by_player.resize(num_lookup, 0);
             for fleet in &self.fleets {
                 if fleet.unit_type == crate::game::UnitType::Warship {
                     let pid = usize::from(fleet.owner_id);
@@ -193,19 +259,20 @@ impl SowEngine {
                             alive_warships_by_player[pid] = true;
                         }
                     }
-                }
-            }
-            if !self.building_productions.is_empty() {
-                for b in &self.buildings {
-                    let pid = usize::from(b.owner_id);
-                    if pid < num_lookup
-                        && let Some(state) = self.building_productions.get(&b.id)
-                    {
-                        let queued = state.warship_queue_len() as u32;
-                        if queued > 0 {
-                            queued_warships_by_player[pid] =
-                                queued_warships_by_player[pid].saturating_add(queued);
-                        }
+                } else if fleet.troops > 0.0
+                    && matches!(
+                        fleet.unit_type,
+                        crate::game::UnitType::TradeShip | crate::game::UnitType::TransportShip
+                    )
+                {
+                    let comp = self.water.component_of(fleet.current_tile);
+                    if comp != 0 {
+                        shared.prey_by_comp.entry(comp).or_default().push((
+                            fleet.id,
+                            fleet.owner_id,
+                            fleet.current_tile,
+                            fleet.unit_type == crate::game::UnitType::TransportShip,
+                        ));
                     }
                 }
             }
@@ -249,6 +316,7 @@ impl SowEngine {
                 bot_id,
                 bot_iq,
                 build_cost,
+                &shared,
                 &mut decisions,
             );
 
@@ -276,6 +344,7 @@ impl SowEngine {
                     owned_warships,
                     queued_warships,
                     used_slots,
+                    &shared,
                     &mut decisions,
                 );
             } else if slot.do_attack

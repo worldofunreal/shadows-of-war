@@ -174,7 +174,7 @@ pub fn is_uuid_v4(value: &str) -> bool {
 fn is_match_mode(value: &str) -> bool {
     matches!(
         value,
-        "ranked_1v1" | "custom" | "campaign" | "tutorial" | "single_player" | "other"
+        "ranked_1v1" | "ranked_ffa" | "custom" | "campaign" | "tutorial" | "single_player" | "other"
     )
 }
 

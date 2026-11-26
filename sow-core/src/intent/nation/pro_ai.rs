@@ -1,13 +1,13 @@
 use super::profile::{AiStrategyWeights, BotDecision, BotDecisionKind};
 use super::structures::{
     PLACEMENT_ATTEMPTS, StructureCandidates, bot_structure_target_count,
-    resolve_military_camp_from_candidates, resolve_structure_from_candidates,
+    find_city_site_from_candidates, find_district_site_in_owned_cities,
 };
 use crate::building::{
-    Building, BuildingAggregate, MAX_WARSHIP_QUEUE, RAILWAY_LINK_DISTANCE,
-    city_capacity_level_weight, city_gold_level_weight, city_income_level_weight,
-    find_structure_site_near, military_camp_gold_level_weight, military_camp_troop_level_weight,
-    port_income_level_weight, structure_max_affordable_upgrade, trading_post_gold_level_weight,
+    Building, BuildingAggregate, MAX_WARSHIP_QUEUE, city_anchors_from_buildings, city_capacity_level_weight, city_gold_level_weight,
+    city_income_level_weight, evaluate_city_site_traits, farm_gold_level_weight,
+    farm_troop_level_weight, military_camp_troop_level_weight, port_income_level_weight,
+    structure_max_affordable_upgrade, trading_post_gold_level_weight,
 };
 use crate::engine::SowEngine;
 use crate::execution::income_rates::gold_income_per_second;
@@ -50,179 +50,140 @@ impl SowEngine {
         AiStrategyWeights::PRO
     }
 
-    /// Collects nearby hostile reference coordinates (`home` / buildings) once for site safety scoring.
-    fn pro_hostile_anchors(&self, bot_id: u16) -> Vec<(u32, u32)> {
-        let w = self.state.map.width.max(1);
-        let mut anchors = Vec::new();
-        for p in &self.state.players {
-            if !p.alive || p.id == bot_id || crate::execution::hero_effects::allied(&self.state, bot_id, p.id) {
-                continue;
-            }
-            if let Some((hx, hy)) = p.home {
-                anchors.push((hx, hy));
-            }
-        }
-        for b in &self.buildings {
-            if b.owner_id != bot_id && !crate::execution::hero_effects::allied(&self.state, bot_id, b.owner_id) {
-                anchors.push((b.tile_idx % w, b.tile_idx / w));
-            }
-        }
-        anchors
-    }
-
-    /// Scores how safe an interior candidate tile is (higher = further from hostile anchors).
-    fn pro_site_safety_score(&self, tile_idx: u32, anchors: &[(u32, u32)]) -> u64 {
-        if anchors.is_empty() || self.state.map.width == 0 {
+    /// Scores how safe an interior candidate tile is (higher = further from hostile anchors)
+    /// using the spatial `building_grid` (`O(local)`) plus cached alive enemy capitals (`O(players)`).
+    fn pro_site_safety_score(
+        &self,
+        bot_id: u16,
+        tile_idx: u32,
+        alive_homes: &[(u16, u32, u32)],
+    ) -> u64 {
+        let w = self.state.map.width;
+        if w == 0 {
             return 1;
         }
-        let w = self.state.map.width;
         let x = tile_idx % w;
         let y = tile_idx / w;
         let mut min_dist_sq = u64::MAX;
-        for &(ax, ay) in anchors {
+        for entry in self.building_grid.iter_all_in_range(x, y, 48) {
+            let owner = self.state.map.owner_id(entry.x, entry.y);
+            if owner == 0
+                || owner == bot_id
+                || crate::execution::hero_effects::allied(&self.state, bot_id, owner)
+            {
+                continue;
+            }
+            let dx = u64::from(x.abs_diff(entry.x));
+            let dy = u64::from(y.abs_diff(entry.y));
+            min_dist_sq = min_dist_sq.min(dx * dx + dy * dy);
+        }
+        for &(owner, ax, ay) in alive_homes {
+            if owner == bot_id
+                || crate::execution::hero_effects::allied(&self.state, bot_id, owner)
+            {
+                continue;
+            }
             let dx = u64::from(x.abs_diff(ax));
             let dy = u64::from(y.abs_diff(ay));
             min_dist_sq = min_dist_sq.min(dx * dx + dy * dy);
         }
-        min_dist_sq
+        if min_dist_sq == u64::MAX {
+            1
+        } else {
+            min_dist_sq
+        }
     }
 
-    /// Finds the best valid site for `kind` using strategic map geometry rather than the first
-    /// arbitrary border sample.
+    /// Finds the best valid site for `kind` inside owned City radii (for districts) or
+    /// respecting level-scaled City spacing and terrain traits (for founding new Cities).
     fn pro_find_site_for_kind(
         &mut self,
         bot_id: u16,
         kind: BuildingKind,
-        anchors: &[(u32, u32)],
+        shared: &super::AiTickShared,
     ) -> Option<u32> {
+        let alive_homes = &shared.alive_homes;
+        let owner_indices = shared
+            .buildings_by_owner
+            .get(usize::from(bot_id))
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
         let w = self.state.map.width;
         let h = self.state.map.height;
         if w == 0 || h == 0 {
             return None;
         }
 
-        if kind == BuildingKind::TradingPost {
-            // Optimal TradingPost site: within RAILWAY_LINK_DISTANCE of an owned ready/built
-            // station, preferring longer safe rail segments (for railway_distance_bonus up to 2x).
-            let stations: Vec<u32> = self
-                .buildings
-                .iter()
-                .filter(|b| {
-                    b.owner_id == bot_id
-                        && matches!(
-                            b.kind,
-                            BuildingKind::City | BuildingKind::Port | BuildingKind::TradingPost
-                        )
-                })
-                .map(|b| b.tile_idx)
-                .collect();
-            let mut best: Option<(i64, u32)> = None;
-            let ideal_r: i32 = 44;
-            for &station_tile in stations.iter().take(6) {
-                let sx = (station_tile % w) as i32;
-                let sy = (station_tile / w) as i32;
-                let offsets = [
-                    (ideal_r, 0),
-                    (-ideal_r, 0),
-                    (0, ideal_r),
-                    (0, -ideal_r),
-                    (30, 30),
-                    (-30, 30),
-                    (30, -30),
-                    (-30, -30),
-                    (20, 0),
-                    (-20, 0),
-                    (0, 20),
-                    (0, -20),
-                ];
-                for (dx, dy) in offsets {
-                    let nx = sx + dx;
-                    let ny = sy + dy;
-                    if !self.state.map.is_valid_coord(nx, ny) {
-                        continue;
-                    }
-                    let probe = ny as u32 * w + nx as u32;
-                    let Some(site) = find_structure_site_near(
-                        &self.state.map,
-                        bot_id,
-                        probe,
-                        BuildingKind::TradingPost,
-                        &self.building_grid,
-                        &mut self.placement_scratch,
-                        self.legacy_building_rules,
-                    ) else {
-                        continue;
-                    };
-                    let rx = site % w;
-                    let ry = site / w;
-                    let dist_sq = rx.abs_diff(sx as u32).pow(2) + ry.abs_diff(sy as u32).pow(2);
-                    if dist_sq > RAILWAY_LINK_DISTANCE.saturating_mul(RAILWAY_LINK_DISTANCE) {
-                        continue;
-                    }
-                    let safety = self.pro_site_safety_score(site, anchors).min(10_000) as i64;
-                    let rail_score = (dist_sq as f64).sqrt() as i64 * 40 + safety;
-                    if best.is_none_or(|(best_score, _)| rail_score > best_score) {
-                        best = Some((rail_score, site));
-                    }
-                }
-                if let Some(site) = find_structure_site_near(
-                    &self.state.map,
-                    bot_id,
-                    station_tile,
-                    BuildingKind::TradingPost,
-                    &self.building_grid,
-                    &mut self.placement_scratch,
-                    self.legacy_building_rules,
-                ) {
-                    let rx = site % w;
-                    let ry = site / w;
-                    let dist = ((rx.abs_diff(sx as u32).pow(2) + ry.abs_diff(sy as u32).pow(2)) as f64)
-                        .sqrt() as i64;
-                    let safety = self.pro_site_safety_score(site, anchors).min(10_000) as i64;
-                    let rail_score = dist * 40 + safety;
-                    if best.is_none_or(|(best_score, _)| rail_score > best_score) {
-                        best = Some((rail_score, site));
-                    }
-                }
-            }
-            if let Some((_, site)) = best {
-                return Some(site);
-            }
-        }
-
-        if kind == BuildingKind::Tower && !anchors.is_empty() {
-            // Place Towers near our highest-value building closest to an enemy front.
-            let mut best_anchor_tile: Option<(u64, u32)> = None;
-            for b in &self.buildings {
-                if b.owner_id != bot_id
-                    || !matches!(
+        if kind.is_non_city() {
+            if kind == BuildingKind::Tower && !alive_homes.is_empty() {
+                let mut best_anchor_tile: Option<(u64, u32)> = None;
+                for &idx in owner_indices {
+                    let b = &self.buildings[idx];
+                    if !matches!(
                         b.kind,
                         BuildingKind::City | BuildingKind::TradingPost | BuildingKind::Port
-                    )
+                    ) {
+                        continue;
+                    }
+                    let dist_sq = self.pro_site_safety_score(bot_id, b.tile_idx, alive_homes);
+                    if best_anchor_tile.is_none_or(|(best_d, _)| dist_sq < best_d) {
+                        best_anchor_tile = Some((dist_sq, b.tile_idx));
+                    }
+                }
+                if let Some((_, protect_tile)) = best_anchor_tile
+                    && let Some(site) =
+                        find_district_site_in_owned_cities(self, bot_id, kind, Some(protect_tile))
                 {
-                    continue;
-                }
-                let dist_sq = self.pro_site_safety_score(b.tile_idx, anchors);
-                if best_anchor_tile.is_none_or(|(best_d, _)| dist_sq < best_d) {
-                    best_anchor_tile = Some((dist_sq, b.tile_idx));
+                    return Some(site);
                 }
             }
-            if let Some((_, protect_tile)) = best_anchor_tile
-                && let Some(site) = find_structure_site_near(
-                    &self.state.map,
-                    bot_id,
-                    protect_tile,
-                    BuildingKind::Tower,
-                    &self.building_grid,
-                    &mut self.placement_scratch,
-                    self.legacy_building_rules,
-                )
-            {
-                return Some(site);
+
+            if kind == BuildingKind::Port {
+                let cities = city_anchors_from_buildings(&self.buildings, w);
+                for city in cities
+                    .into_iter()
+                    .filter(|c| c.owner_id == bot_id && c.active_level >= 1)
+                {
+                    if evaluate_city_site_traits(
+                        &self.state.map,
+                        city.x,
+                        city.y,
+                        &[],
+                        &self.state.config,
+                    )
+                    .has_coastal_port_access
+                        && let Some(site) = find_district_site_in_owned_cities(
+                            self,
+                            bot_id,
+                            BuildingKind::Port,
+                            Some(city.y * w + city.x),
+                        )
+                    {
+                        return Some(site);
+                    }
+                }
+                return None;
             }
+
+            let mut best_city: Option<(u64, u32)> = None;
+            for &idx in owner_indices {
+                let b = &self.buildings[idx];
+                if b.kind == BuildingKind::City && b.active_level() >= 1 {
+                    let safety = self.pro_site_safety_score(bot_id, b.tile_idx, alive_homes);
+                    if best_city.is_none_or(|(best_s, _)| safety > best_s) {
+                        best_city = Some((safety, b.tile_idx));
+                    }
+                }
+            }
+            return find_district_site_in_owned_cities(
+                self,
+                bot_id,
+                kind,
+                best_city.map(|(_, t)| t),
+            );
         }
 
-        // General candidate pool (borders + home + interior samples).
+        // General candidate pool (borders + home + interior samples) for founding a new City.
         {
             let (state, scratch) = (&mut self.state, &mut self.placement_scratch);
             let p = state.player_mut(bot_id)?;
@@ -249,91 +210,13 @@ impl SowEngine {
             }
         }
 
-        if kind == BuildingKind::Port {
-            let border_candidates = std::mem::take(&mut self.placement_scratch.border_scratch);
-            let mut best_port: Option<(usize, u32)> = None;
-            for &tile in &border_candidates {
-                let comp = self.water.component_of(tile);
-                if comp == 0 {
-                    continue;
-                }
-                let Some(site) = find_structure_site_near(
-                    &self.state.map,
-                    bot_id,
-                    tile,
-                    BuildingKind::Port,
-                    &self.building_grid,
-                    &mut self.placement_scratch,
-                    self.legacy_building_rules,
-                ) else {
-                    continue;
-                };
-                let sea_size = self
-                    .water
-                    .shoreline_tiles
-                    .get(comp as usize)
-                    .map_or(0, Vec::len);
-                if best_port.is_none_or(|(best_size, _)| sea_size > best_size) {
-                    best_port = Some((sea_size, site));
-                }
-            }
-            self.placement_scratch.border_scratch = border_candidates;
-            self.placement_scratch.interior_scratch.clear();
-            return best_port.map(|(_, s)| s);
-        }
-
         let border_candidates = std::mem::take(&mut self.placement_scratch.border_scratch);
         let interior_candidates = std::mem::take(&mut self.placement_scratch.interior_scratch);
         let candidates = StructureCandidates {
             border: &border_candidates,
             interior: &interior_candidates,
         };
-        let resolved = if kind == BuildingKind::MilitaryCamp && self.legacy_building_rules {
-            resolve_military_camp_from_candidates(
-                &self.state.map,
-                bot_id,
-                candidates,
-                &self.buildings,
-                &self.building_grid,
-                self.legacy_building_rules,
-            )
-        } else {
-            // Try safest interior points first for economic core structures.
-            let mut best_site: Option<(u64, u32)> = None;
-            if matches!(kind, BuildingKind::City | BuildingKind::MilitaryCamp) {
-                for &(ix, iy) in &interior_candidates {
-                    if !self.state.map.is_valid_coord(ix, iy) {
-                        continue;
-                    }
-                    let idx = iy as u32 * w + ix as u32;
-                    if let Some(site) = find_structure_site_near(
-                        &self.state.map,
-                        bot_id,
-                        idx,
-                        kind,
-                        &self.building_grid,
-                        &mut self.placement_scratch,
-                        self.legacy_building_rules,
-                    ) {
-                        let safety = self.pro_site_safety_score(site, anchors);
-                        if best_site.is_none_or(|(best_s, _)| safety > best_s) {
-                            best_site = Some((safety, site));
-                        }
-                    }
-                }
-            }
-            best_site.map(|(_, site)| site).or_else(|| {
-                resolve_structure_from_candidates(
-                    &self.state.map,
-                    bot_id,
-                    kind,
-                    candidates,
-                    &self.building_grid,
-                    &mut self.placement_scratch,
-                    self.legacy_building_rules,
-                )
-            })
-        };
+        let resolved = find_city_site_from_candidates(self, bot_id, candidates);
         self.placement_scratch.border_scratch = border_candidates;
         self.placement_scratch.interior_scratch = interior_candidates;
         resolved
@@ -387,15 +270,21 @@ impl SowEngine {
                 d_gold * weights.gold_value_weight
             }
             BuildingKind::MilitaryCamp => {
-                let d_gold = (military_camp_gold_level_weight(to_lvl)
-                    - military_camp_gold_level_weight(from_lvl))
-                    * cfg.military_camp_gold_income
-                    * hero_gold(District::MilitaryCamp);
                 let d_troop = (military_camp_troop_level_weight(to_lvl)
                     - military_camp_troop_level_weight(from_lvl))
                     * cfg.military_camp_troop_income
                     * hero_troop(District::MilitaryCamp);
-                d_gold * weights.gold_value_weight + d_troop * weights.troop_value_weight + 12.0
+                let silo_unlock = if from_lvl < 5 && to_lvl >= 5 { 60.0 } else { 0.0 };
+                d_troop * weights.troop_value_weight + 16.0 + silo_unlock
+            }
+            BuildingKind::Farm => {
+                let d_gold = (farm_gold_level_weight(to_lvl) - farm_gold_level_weight(from_lvl))
+                    * cfg.farm_gold_income
+                    * hero_gold(District::Farm);
+                let d_troop = (farm_troop_level_weight(to_lvl) - farm_troop_level_weight(from_lvl))
+                    * cfg.farm_troop_income
+                    * hero_troop(District::Farm);
+                d_gold * weights.gold_value_weight + d_troop * weights.troop_value_weight + 8.0
             }
             BuildingKind::Port => {
                 let d_weight = port_income_level_weight(to_lvl) - port_income_level_weight(from_lvl);
@@ -406,10 +295,11 @@ impl SowEngine {
                     + weights.port_naval_slot_bonus
             }
             BuildingKind::Tower => {
+                let sam_bonus = if from_lvl < 5 && to_lvl >= 5 { 45.0 } else { 0.0 };
                 if is_under_attack {
-                    18.0 * weights.tower_defense_priority * f64::from(to_lvl - from_lvl)
+                    18.0 * weights.tower_defense_priority * f64::from(to_lvl - from_lvl) + sam_bonus
                 } else {
-                    2.5 * weights.tower_defense_priority * f64::from(to_lvl - from_lvl)
+                    2.5 * weights.tower_defense_priority * f64::from(to_lvl - from_lvl) + sam_bonus
                 }
             }
             _ => 0.0,
@@ -418,6 +308,7 @@ impl SowEngine {
 
     /// Evaluates build orders, ROI of new structures vs single/multi-level upgrades, and strategic
     /// site placement for Pro-tier bots (`Ghost` / `Terminator`).
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn pro_decide_structure_action(
         &mut self,
         bot_id: u16,
@@ -426,24 +317,24 @@ impl SowEngine {
         player_tile_count: u32,
         agg: BuildingAggregate,
         is_under_attack: bool,
+        shared: &super::AiTickShared,
     ) -> Option<BotDecision> {
         let weights = self.pro_weights_for(bot_id);
         let player = self.state.player(bot_id)?;
         let leader = player.leader;
-        let anchors = self.pro_hostile_anchors(bot_id);
         let all_structures = agg.count_city
             + agg.count_tower
             + agg.count_trading_post
             + agg.count_port
             + agg.count_military_camp
-            + agg.count_sam;
+            + agg.count_farm;
 
         // 1. Always establish an opening City first.
         if agg.count_city == 0
             && let Some((_, cost, _)) = self.foundation_quote(bot_id, BuildingKind::City)
         {
             if player_gold >= cost
-                && let Some(site) = self.pro_find_site_for_kind(bot_id, BuildingKind::City, &anchors)
+                && let Some(site) = self.pro_find_site_for_kind(bot_id, BuildingKind::City, shared)
             {
                 return Some(BotDecision {
                     bot_id,
@@ -469,79 +360,17 @@ impl SowEngine {
         let mut best_affordable: Option<EvaluatedCandidate> = None;
         let mut best_overall: Option<EvaluatedCandidate> = None;
 
-        // 2. Evaluate founding a new structure for each economic/military/defensive kind.
-        for kind in [
-            BuildingKind::TradingPost,
-            BuildingKind::City,
-            BuildingKind::MilitaryCamp,
-            BuildingKind::Port,
-            BuildingKind::Tower,
-        ] {
-            if kind == BuildingKind::TradingPost && !has_rail_partner {
-                continue;
-            }
-            let Some((level, cost, _)) = self.foundation_quote(bot_id, kind) else {
-                continue;
-            };
-            if cost > lookahead_budget || !cost.is_finite() {
-                continue;
-            }
-            let target_count = bot_structure_target_count(kind, city_equivalent, bot_iq).max(1);
-            let owned = agg.total_structures_of_kind(kind);
-            if kind == BuildingKind::Tower && !is_under_attack && owned >= target_count {
-                continue;
-            }
-            let Some(site) = self.pro_find_site_for_kind(bot_id, kind, &anchors) else {
-                continue;
-            };
-
-            let mut value = self.marginal_value_for_upgrade(
-                kind,
-                0,
-                level,
-                leader,
-                has_rail_partner,
-                is_under_attack,
-                weights,
-            );
-            // Encourage early diversity (first City -> first TradingPost -> first Camp -> first Port).
-            if owned == 0 && kind != BuildingKind::Tower {
-                value *= 1.45;
-            } else if owned >= target_count {
-                value *= 0.55;
-            }
-            let roi_score = value / cost.max(1.0);
-
-            if best_overall
-                .as_ref()
-                .is_none_or(|best| roi_score > best.roi_score)
-            {
-                best_overall = Some(EvaluatedCandidate {
-                    action: CandidateAction::Build { kind, site },
-                    cost,
-                    roi_score,
-                });
-            }
-            if cost <= player_gold
-                && best_affordable
-                    .as_ref()
-                    .is_none_or(|best| roi_score > best.roi_score)
-            {
-                best_affordable = Some(EvaluatedCandidate {
-                    action: CandidateAction::Build { kind, site },
-                    cost,
-                    roi_score,
-                });
-            }
-        }
-
-        // 3. Evaluate upgrading existing ready structures (single-step + multi-level UpgradeStructureTo).
-        let buildings_snapshot: Vec<Building> = self
-            .buildings
+        // 2. Evaluate upgrades first (pure O(owned_buildings) math via preindexed owner list).
+        let owner_indices = shared
+            .buildings_by_owner
+            .get(usize::from(bot_id))
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
+        let buildings_snapshot: Vec<Building> = owner_indices
             .iter()
+            .filter_map(|&idx| self.buildings.get(idx))
             .filter(|b| {
-                b.owner_id == bot_id
-                    && !b.under_construction
+                !b.under_construction
                     && b.level < b.kind.max_level()
                     && !self
                         .building_productions
@@ -555,7 +384,8 @@ impl SowEngine {
             let max_allowed = self
                 .campaign_unlocks
                 .as_ref()
-                .map_or(b.kind.max_level(), |unlocks| unlocks.building_level(b.kind));
+                .map_or(b.kind.max_level(), |unlocks| unlocks.building_level(b.kind))
+                .min(self.building_upgrade_level_cap(b));
             if b.level >= max_allowed {
                 continue;
             }
@@ -633,6 +463,106 @@ impl SowEngine {
                         roi_score,
                     });
                 }
+            }
+        }
+
+        // 3. Score founding new structures by ROI FIRST, then run terrain placement lazily
+        //    from highest ROI downward only while a candidate can beat best_overall / best_affordable.
+        let mut foundation_ranked = [(0usize, BuildingKind::City, 0.0f64, 0.0f64); 6];
+        let mut ranked_len = 0usize;
+        for (order_idx, kind) in [
+            BuildingKind::TradingPost,
+            BuildingKind::Farm,
+            BuildingKind::City,
+            BuildingKind::MilitaryCamp,
+            BuildingKind::Port,
+            BuildingKind::Tower,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            if kind == BuildingKind::TradingPost && !has_rail_partner {
+                continue;
+            }
+            let Some((level, cost, _)) = self.foundation_quote(bot_id, kind) else {
+                continue;
+            };
+            if cost > lookahead_budget || !cost.is_finite() {
+                continue;
+            }
+            let target_count = bot_structure_target_count(kind, city_equivalent, bot_iq).max(1);
+            let owned = agg.total_structures_of_kind(kind);
+            if kind == BuildingKind::Tower && !is_under_attack && owned >= target_count {
+                continue;
+            }
+            let mut value = self.marginal_value_for_upgrade(
+                kind,
+                0,
+                level,
+                leader,
+                has_rail_partner,
+                is_under_attack,
+                weights,
+            );
+            if owned == 0 && kind != BuildingKind::Tower {
+                value *= 1.45;
+            } else if owned >= target_count {
+                value *= 0.55;
+            }
+            let roi_score = value / cost.max(1.0);
+            foundation_ranked[ranked_len] = (order_idx, kind, cost, roi_score);
+            ranked_len += 1;
+        }
+        foundation_ranked[..ranked_len].sort_unstable_by(|a, b| {
+            b.3.total_cmp(&a.3).then_with(|| a.0.cmp(&b.0))
+        });
+
+        for &(_, kind, cost, roi_score) in &foundation_ranked[..ranked_len] {
+            let affordable = cost <= player_gold;
+            let beats_affordable = affordable
+                && best_affordable
+                    .as_ref()
+                    .is_none_or(|best| roi_score > best.roi_score);
+            let beats_overall = best_overall
+                .as_ref()
+                .is_none_or(|best| roi_score > best.roi_score);
+            let needed_for_lookahead = beats_overall
+                && !affordable
+                && !is_under_attack
+                && best_affordable
+                    .as_ref()
+                    .is_none_or(|aff| roi_score > aff.roi_score * 1.25);
+
+            if !beats_affordable && !needed_for_lookahead {
+                if !beats_overall
+                    && best_affordable
+                        .as_ref()
+                        .is_some_and(|best| roi_score <= best.roi_score)
+                {
+                    break;
+                }
+                continue;
+            }
+
+            let Some(site) = self.pro_find_site_for_kind(bot_id, kind, shared) else {
+                continue;
+            };
+            if beats_overall {
+                best_overall = Some(EvaluatedCandidate {
+                    action: CandidateAction::Build { kind, site },
+                    cost,
+                    roi_score,
+                });
+            }
+            if beats_affordable {
+                best_affordable = Some(EvaluatedCandidate {
+                    action: CandidateAction::Build { kind, site },
+                    cost,
+                    roi_score,
+                });
+                // Sorted descending by ROI: once an affordable foundation succeeds, no lower-ROI
+                // foundation can beat either best_affordable or best_overall.
+                break;
             }
         }
 
@@ -714,9 +644,10 @@ impl SowEngine {
                 BuildingKind::City => 110.0 + 25.0 * f64::from(b.level),
                 BuildingKind::TradingPost => 95.0 + 20.0 * f64::from(b.level),
                 BuildingKind::Port => 80.0 + 18.0 * f64::from(b.level),
-                BuildingKind::MilitaryCamp => 70.0 + 15.0 * f64::from(b.level),
+                BuildingKind::Farm => 75.0 + 16.0 * f64::from(b.level),
+                BuildingKind::MilitaryCamp => 70.0 + 18.0 * f64::from(b.level),
                 BuildingKind::SAM => 60.0 + 12.0 * f64::from(b.level),
-                BuildingKind::Tower => 12.0 * f64::from(b.level),
+                BuildingKind::Tower => 12.0 * f64::from(b.level) + if b.level >= 5 { 45.0 } else { 0.0 },
             };
             let bx = b.tile_idx % w;
             let by = b.tile_idx / w;
@@ -747,6 +678,7 @@ impl SowEngine {
         owned_warships: u32,
         queued_warships: u32,
         used_slots: u32,
+        shared: &super::AiTickShared,
         decisions: &mut Vec<BotDecision>,
     ) {
         if !self.campaign_allows_action(crate::campaign::CampaignAction::Warship) {
@@ -777,12 +709,18 @@ impl SowEngine {
         {
             let mut chosen_port: Option<u64> = None;
             let mut port_queued = 0u32;
-            for port in self.buildings.iter().filter(|p| {
-                p.owner_id == bot_id
-                    && p.kind == BuildingKind::Port
-                    && !p.under_construction
-                    && p.active_level() >= 1
-            }) {
+            let owner_indices = shared
+                .buildings_by_owner
+                .get(usize::from(bot_id))
+                .map(Vec::as_slice)
+                .unwrap_or(&[]);
+            for port in owner_indices
+                .iter()
+                .filter_map(|&idx| self.buildings.get(idx))
+                .filter(|p| {
+                    p.kind == BuildingKind::Port && !p.under_construction && p.active_level() >= 1
+                })
+            {
                 let q_len = self
                     .building_productions
                     .get(&port.id)
@@ -865,33 +803,34 @@ impl SowEngine {
             let fy = fleet.current_tile / w;
 
             // Find closest high-priority enemy merchant or transport in same sea.
-            let target_ship = self
-                .fleets
-                .iter()
-                .filter(|other| {
-                    other.troops > 0.0
-                        && other.owner_id != bot_id
-                        && matches!(other.unit_type, UnitType::TradeShip | UnitType::TransportShip)
-                        && self.naval_target_allowed(bot_id, other.owner_id)
-                        && self.water.component_of(other.current_tile) == comp
-                })
-                .min_by_key(|other| {
-                    let priority = u32::from(other.unit_type != UnitType::TransportShip);
-                    let dist = (other.current_tile % w).abs_diff(fx)
-                        + (other.current_tile / w).abs_diff(fy);
-                    (priority, dist, other.id)
+            let target_ship = shared
+                .prey_by_comp
+                .get(&comp)
+                .and_then(|ships| {
+                    ships
+                        .iter()
+                        .filter(|&&(_, owner_id, _, _)| {
+                            owner_id != bot_id && self.naval_target_allowed(bot_id, owner_id)
+                        })
+                        .min_by_key(|&&(fleet_id, _, current_tile, is_transport)| {
+                            let priority = u32::from(!is_transport);
+                            let dist = (current_tile % w).abs_diff(fx)
+                                + (current_tile / w).abs_diff(fy);
+                            (priority, dist, fleet_id)
+                        })
+                        .copied()
                 });
 
-            if let Some(prey) = target_ship {
-                let dst_dist = (prey.current_tile % w).abs_diff(fleet.dst_tile % w)
-                    + (prey.current_tile / w).abs_diff(fleet.dst_tile / w);
+            if let Some((_, _, prey_tile, _)) = target_ship {
+                let dst_dist = (prey_tile % w).abs_diff(fleet.dst_tile % w)
+                    + (prey_tile / w).abs_diff(fleet.dst_tile / w);
                 if dst_dist > 12 {
                     decisions.push(BotDecision {
                         bot_id,
                         kind: BotDecisionKind::Attack,
                         intent: GameplayIntent::MoveWarships {
                             unit_ids: vec![fleet.id],
-                            target_tile: prey.current_tile,
+                            target_tile: prey_tile,
                         },
                     });
                 }

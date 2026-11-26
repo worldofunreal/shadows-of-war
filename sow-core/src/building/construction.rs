@@ -51,7 +51,7 @@ impl SowEngine {
             .get(&building_id)
             .is_some_and(|state| state.arsenal_build.is_some());
         if target_level <= building.level
-            || next_level > building.kind.max_level()
+            || next_level > self.building_upgrade_level_cap(building)
             || !owner_alive
             || arsenal_busy
             || !self.campaign_allows_building(building.kind, next_level)
@@ -882,6 +882,7 @@ fn structure_marks_leader(leader: Leader, kind: BuildingKind) -> bool {
                 | (District::TradingPost, BuildingKind::TradingPost)
                 | (District::Port, BuildingKind::Port)
                 | (District::MilitaryCamp, BuildingKind::MilitaryCamp)
+                | (District::Farm, BuildingKind::Farm)
         ),
         _ => false,
     }

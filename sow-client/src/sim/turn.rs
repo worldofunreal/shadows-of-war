@@ -139,6 +139,7 @@ impl TutorialObservation {
                     sow_core::game::BuildingKind::TradingPost => "trading_posts",
                     sow_core::game::BuildingKind::Port => "ports",
                     sow_core::game::BuildingKind::MilitaryCamp => "military_camps",
+                    sow_core::game::BuildingKind::Farm => "farms",
                     sow_core::game::BuildingKind::SAM => "sams",
                     sow_core::game::BuildingKind::MissileSilo => "missile_silos",
                 };
@@ -197,6 +198,7 @@ impl TutorialObservation {
         for (kind, key) in [
             (sow_core::game::BuildingKind::City, "city"),
             (sow_core::game::BuildingKind::MilitaryCamp, "military_camp"),
+            (sow_core::game::BuildingKind::Farm, "farm"),
             (sow_core::game::BuildingKind::TradingPost, "trading_post"),
             (sow_core::game::BuildingKind::Tower, "tower"),
             (sow_core::game::BuildingKind::Port, "port"),
@@ -260,6 +262,7 @@ impl TutorialObservation {
             let key = match building.kind {
                 sow_core::game::BuildingKind::City => "city",
                 sow_core::game::BuildingKind::MilitaryCamp => "military_camp",
+                sow_core::game::BuildingKind::Farm => "farm",
                 sow_core::game::BuildingKind::TradingPost => "trading_post",
                 sow_core::game::BuildingKind::Tower => "tower",
                 sow_core::game::BuildingKind::Port => "port",
@@ -398,6 +401,7 @@ impl TutorialObservation {
                         sow_core::game::BuildingKind::TradingPost => "trading_posts",
                         sow_core::game::BuildingKind::Port => "ports",
                         sow_core::game::BuildingKind::MilitaryCamp => "military_camps",
+                        sow_core::game::BuildingKind::Farm => "farms",
                         sow_core::game::BuildingKind::SAM => "sams",
                     sow_core::game::BuildingKind::MissileSilo => "missile_silos",
                     };

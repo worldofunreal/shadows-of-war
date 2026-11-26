@@ -30,6 +30,7 @@ struct CampaignAssaultReinforcement {
 #[serde(tag = "type", rename_all = "snake_case")]
 enum WebMenuCommand {
     QuickMatch,
+    QuickMatchFfa,
     JoinMatchmaking,
     JoinLobby {
         lobby_id: u64,
@@ -234,6 +235,13 @@ enum WebMenuCommand {
     SelectBuilding {
         kind: sow_core::game::BuildingKind,
     },
+    SelectDistrict {
+        kind: sow_core::game::BuildingKind,
+        city_id: u64,
+    },
+    UpgradeBuilding {
+        building_id: u64,
+    },
     ConfirmBuildingPlacement,
     ClearPlacement,
     NudgePlacement {
@@ -258,7 +266,9 @@ enum WebMenuCommand {
     WarshipOrderMove,
     WarshipOrderPatrol,
     WarshipClearSelection,
-    SelectNuke { kind: Option<sow_core::game::NukeKind> },
+    SelectNuke {
+        kind: Option<sow_core::game::NukeKind>,
+    },
     ToggleInbox {
         #[serde(default)]
         open: Option<bool>,
@@ -554,7 +564,10 @@ thread_local! {
 
 }
 
-type HudTickSummaryKey = ((u64, u16, bool, usize, usize, usize), (bool, u64, u32, u32, u32));
+type HudTickSummaryKey = (
+    (u64, u16, bool, usize, usize, usize),
+    (bool, u64, u32, u32, u32),
+);
 type HoverInputKey = Option<(u64, u16, u16, u64)>;
 type DiagnosticsKey = (bool, Option<u32>, Option<u32>);
 
@@ -699,8 +712,7 @@ fn player_inbox_signature(player: &sow_core::protocol::PlayerSnapshot) -> u64 {
 }
 
 fn my_player_summary(app: &SowApp, snapshot_tick: u64, my_pid: u16) -> Option<MyPlayerSummary> {
-    let tick_ms = if app.sim.config.tick_rate_ms.is_finite() && app.sim.config.tick_rate_ms > 0.0
-    {
+    let tick_ms = if app.sim.config.tick_rate_ms.is_finite() && app.sim.config.tick_rate_ms > 0.0 {
         f64::from(app.sim.config.tick_rate_ms)
     } else {
         100.0
@@ -865,6 +877,10 @@ impl SowApp {
                         self.quick_match_revision = self.quick_match_revision.wrapping_add(1);
                     }
                 }
+                WebMenuCommand::QuickMatchFfa => {
+                    crate::store_portals::track_product_event("menu_ranked_ffa");
+                    self.request_ranked_ffa();
+                }
                 WebMenuCommand::JoinMatchmaking => {
                     if !self.ui.app.main_menu_state.is_waiting {
                         crate::store_portals::track_product_event("menu_join_attempt");
@@ -972,9 +988,7 @@ impl SowApp {
                             Some(crate::ui::UiText::new("menu.campaign_episode_locked"));
                         continue;
                     }
-                    if revive_boost
-                        && let Some(obj) = match_config.as_object_mut()
-                    {
+                    if revive_boost && let Some(obj) = match_config.as_object_mut() {
                         obj.insert("revive_boost".to_string(), serde_json::Value::Bool(true));
                     }
                     crate::store_portals::track_product_event("menu_campaign_restart");
@@ -1509,6 +1523,21 @@ impl SowApp {
                         self.select_building_kind(kind);
                     }
                 }
+                WebMenuCommand::SelectDistrict { kind, city_id } => {
+                    if !self.ui.tutorial_camera_only {
+                        self.select_district_kind(kind, city_id);
+                    }
+                }
+                WebMenuCommand::UpgradeBuilding { building_id } => {
+                    if !self.ui.tutorial_camera_only
+                        && !self.ui.observing
+                        && self.ui.app.phase == crate::ClientPhase::Playing
+                    {
+                        self.send_intent(sow_core::protocol::GameplayIntent::UpgradeStructure {
+                            building_id,
+                        });
+                    }
+                }
                 WebMenuCommand::ConfirmBuildingPlacement => {
                     if !self.ui.tutorial_camera_only {
                         self.confirm_building_placement();
@@ -1736,60 +1765,59 @@ impl SowApp {
                     self.send_intent(sow_core::protocol::GameplayIntent::ScuttleFleet { fleet_id });
                 }
                 WebMenuCommand::CounterAttack { target_player_id } => {
-                    let counter_attack = self.sim.current_snapshot.as_ref().and_then(|snapshot| {
-                        let my_player_id = self.sim.my_player_id?;
-                        if target_player_id == 0 || target_player_id == my_player_id {
-                            return None;
-                        }
-                        let me = snapshot
-                            .players
-                            .iter()
-                            .find(|player| player.id == my_player_id)?;
-                        let target = snapshot
-                            .players
-                            .iter()
-                            .find(|player| player.id == target_player_id)?;
-                        let same_team = me.team.is_some() && me.team == target.team;
-                        let team_betrayal_open =
-                            sow_core::diplomacy::same_team_betrayal_allows_combat(
-                                self.sim.config.game_mode == "Teams"
-                                    && self
-                                        .sim
-                                        .engine
-                                        .as_ref()
-                                        .is_some_and(|engine| engine.campaign_unlocks.is_none()),
-                                same_team,
-                                me.can_retaliate,
-                                target.can_retaliate,
+                    let counter_attack =
+                        self.sim.current_snapshot.as_ref().and_then(|snapshot| {
+                            let my_player_id = self.sim.my_player_id?;
+                            if target_player_id == 0 || target_player_id == my_player_id {
+                                return None;
+                            }
+                            let me = snapshot
+                                .players
+                                .iter()
+                                .find(|player| player.id == my_player_id)?;
+                            let target = snapshot
+                                .players
+                                .iter()
+                                .find(|player| player.id == target_player_id)?;
+                            let same_team = me.team.is_some() && me.team == target.team;
+                            let team_betrayal_open =
+                                sow_core::diplomacy::same_team_betrayal_allows_combat(
+                                    self.sim.config.game_mode == "Teams"
+                                        && self.sim.engine.as_ref().is_some_and(|engine| {
+                                            engine.campaign_unlocks.is_none()
+                                        }),
+                                    same_team,
+                                    me.can_retaliate,
+                                    target.can_retaliate,
+                                );
+                            if same_team && !team_betrayal_open {
+                                return None;
+                            }
+                            let incoming_troops = incoming_combat_troops(
+                                snapshot,
+                                self.sim.engine.as_ref(),
+                                target_player_id,
+                                my_player_id,
                             );
-                        if same_team && !team_betrayal_open {
-                            return None;
-                        }
-                        let incoming_troops = incoming_combat_troops(
-                            snapshot,
-                            self.sim.engine.as_ref(),
-                            target_player_id,
-                            my_player_id,
-                        );
-                        if !incoming_troops.is_finite() || incoming_troops <= 0.0 {
-                            return None;
-                        }
-                        let troops = selected_counterattack_troops(
-                            me.troops,
-                            self.ui.app.hud_state.attack_ratio,
-                            self.sim.config.attack_cost_neutral,
-                        )?;
-                        Some((
-                            sow_core::protocol::GameplayIntent::Attack(
-                                sow_core::protocol::AttackIntent {
-                                    target_owner: target_player_id,
-                                    troops: Some(troops),
-                                    target_tile: None,
-                                },
-                            ),
-                            me.alliances.contains(&target_player_id) && !target.can_retaliate,
-                        ))
-                    });
+                            if !incoming_troops.is_finite() || incoming_troops <= 0.0 {
+                                return None;
+                            }
+                            let troops = selected_counterattack_troops(
+                                me.troops,
+                                self.ui.app.hud_state.attack_ratio,
+                                self.sim.config.attack_cost_neutral,
+                            )?;
+                            Some((
+                                sow_core::protocol::GameplayIntent::Attack(
+                                    sow_core::protocol::AttackIntent {
+                                        target_owner: target_player_id,
+                                        troops: Some(troops),
+                                        target_tile: None,
+                                    },
+                                ),
+                                me.alliances.contains(&target_player_id) && !target.can_retaliate,
+                            ))
+                        });
                     if let Some((intent, allied)) = counter_attack {
                         if allied {
                             self.ui.app.hud_state.show_betrayal_warning =
@@ -2283,20 +2311,22 @@ impl SowApp {
                     }
                     if let Some(fleet_id) = fleet_id {
                         let my_id = self.sim.my_player_id.unwrap_or(0);
-                        let fleet = self
-                            .sim
-                            .current_snapshot
-                            .as_ref()
-                            .and_then(|snapshot| snapshot.fleets.iter().find(|f| f.id == fleet_id));
+                        let fleet =
+                            self.sim.current_snapshot.as_ref().and_then(|snapshot| {
+                                snapshot.fleets.iter().find(|f| f.id == fleet_id)
+                            });
                         let visible = fleet.is_some_and(|fleet| {
                             fleet.owner_id == my_id
                                 || !crate::theme::dev_config::DevConfig::with(|dev| dev.fog_of_war)
                                 || self.sim.fog_visible.contains(fleet.current_tile)
                         });
-                        if require_owned_fleet && !fleet.is_some_and(|fleet| {
-                            my_id != 0 && fleet.owner_id == my_id
-                                && fleet.unit_type == sow_core::game::UnitType::Warship
-                        }) {
+                        if require_owned_fleet
+                            && !fleet.is_some_and(|fleet| {
+                                my_id != 0
+                                    && fleet.owner_id == my_id
+                                    && fleet.unit_type == sow_core::game::UnitType::Warship
+                            })
+                        {
                             continue;
                         }
                         if visible && let Some(fleet) = fleet {
@@ -2458,21 +2488,26 @@ fn hud_tick_summary(
         });
         let combat_operations_tick = combat_operations_snapshot_tick(snapshot, my_pid, engine);
         let (warship_count, trade_ship_count, transport_ship_count) =
-            snapshot.fleets.iter().fold((0, 0, 0), |(warships, trade_ships, transports), fleet| {
-                if fleet.owner_id != my_pid {
-                    return (warships, trade_ships, transports);
-                }
-                match fleet.unit_type {
-                    sow_core::game::UnitType::Warship => (warships + 1, trade_ships, transports),
-                    sow_core::game::UnitType::TradeShip if fleet.troops > 0.0 => {
-                        (warships, trade_ships + 1, transports)
+            snapshot
+                .fleets
+                .iter()
+                .fold((0, 0, 0), |(warships, trade_ships, transports), fleet| {
+                    if fleet.owner_id != my_pid {
+                        return (warships, trade_ships, transports);
                     }
-                    sow_core::game::UnitType::TransportShip if fleet.troops > 0.0 => {
-                        (warships, trade_ships, transports + 1)
+                    match fleet.unit_type {
+                        sow_core::game::UnitType::Warship => {
+                            (warships + 1, trade_ships, transports)
+                        }
+                        sow_core::game::UnitType::TradeShip if fleet.troops > 0.0 => {
+                            (warships, trade_ships + 1, transports)
+                        }
+                        sow_core::game::UnitType::TransportShip if fleet.troops > 0.0 => {
+                            (warships, trade_ships, transports + 1)
+                        }
+                        _ => (warships, trade_ships, transports),
                     }
-                    _ => (warships, trade_ships, transports),
-                }
-            });
+                });
         let summary = (
             has_active_construction,
             combat_operations_tick,
@@ -2670,7 +2705,11 @@ fn hud_changed_and_update(app: &SowApp) -> bool {
         notification_revision: hud.notification_revision,
         launch_notice_tick: if hud.hud_notifications.iter().any(|notice| {
             notice.fleet_id.is_some() && notice.spawned_at.elapsed().as_secs_f32() < 3.6
-        }) { snapshot_tick } else { 0 },
+        }) {
+            snapshot_tick
+        } else {
+            0
+        },
         is_spectating: app.ui.is_spectating,
         endgame_active,
         endgame_winner: snapshot.and_then(|snapshot| snapshot.winner),
@@ -2783,7 +2822,10 @@ fn dev_config_key(app: &SowApp) -> (bool, Vec<u32>) {
     if !app.ui.show_dev_sidebar {
         return (false, Vec::new());
     }
-    (true, crate::theme::dev_config::DevConfig::with(|config| config.fingerprint()))
+    (
+        true,
+        crate::theme::dev_config::DevConfig::with(|config| config.fingerprint()),
+    )
 }
 
 #[cfg(not(any(feature = "dev", debug_assertions)))]
@@ -3211,6 +3253,7 @@ fn tutorial_building_anchors(
                         let key = match kind {
                             sow_core::game::BuildingKind::City => "City",
                             sow_core::game::BuildingKind::MilitaryCamp => "MilitaryCamp",
+                            sow_core::game::BuildingKind::Farm => "Farm",
                             sow_core::game::BuildingKind::TradingPost => "TradingPost",
                             sow_core::game::BuildingKind::Tower => "Tower",
                             sow_core::game::BuildingKind::Port => "Port",
@@ -3397,6 +3440,8 @@ fn tutorial_guide_tiles(
                 terrain,
                 my_id: my_pid,
                 buildings: &snapshot.buildings,
+                city_id: None,
+                config: &app.sim.config,
             };
             if !placement_cache.is_legal_site(snapshot.tick, &query, idx) {
                 return;
@@ -3841,7 +3886,10 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
             "nuke_queues".to_string(),
             serde_json::json!(observation.nuke_queues_started),
         );
-        facts.insert("nukes_armed".to_string(), serde_json::json!(observation.nukes_armed));
+        facts.insert(
+            "nukes_armed".to_string(),
+            serde_json::json!(observation.nukes_armed),
+        );
     }
     payload
 }
@@ -3905,8 +3953,7 @@ fn build_leaderboard(
         }
     }
     for (index, player) in players.into_iter().enumerate() {
-        let mut value =
-            player_json(player, my_pid, snapshot.total_land_tiles, Some(index + 1));
+        let mut value = player_json(player, my_pid, snapshot.total_land_tiles, Some(index + 1));
         value["can_trade"] =
             serde_json::json!(my_player.is_some_and(|me| me.can_trade_with(player)));
         if let Some(rates) = engine.and_then(|engine| {
@@ -3970,6 +4017,7 @@ fn build_hover_payload(
     let mut ports = 0;
     let mut towers = 0;
     let mut military_camps = 0;
+    let mut farms = 0;
     let mut sams = 0;
     for building in &snapshot.buildings {
         if building.owner_id != owner_id {
@@ -3981,6 +4029,7 @@ fn build_hover_payload(
             sow_core::game::BuildingKind::Port => ports += 1,
             sow_core::game::BuildingKind::Tower => towers += 1,
             sow_core::game::BuildingKind::MilitaryCamp => military_camps += 1,
+            sow_core::game::BuildingKind::Farm => farms += 1,
             sow_core::game::BuildingKind::SAM => sams += 1,
             sow_core::game::BuildingKind::MissileSilo => {}
         }
@@ -3991,6 +4040,7 @@ fn build_hover_payload(
     payload["ports"] = serde_json::json!(ports);
     payload["towers"] = serde_json::json!(towers);
     payload["military_camps"] = serde_json::json!(military_camps);
+    payload["farms"] = serde_json::json!(farms);
     payload["sams"] = serde_json::json!(sams);
     payload
 }
@@ -4215,12 +4265,19 @@ fn building_detail_payload(
         .as_ref()
         .map(|panel| metrics_json(&panel.chips))
         .unwrap_or_default();
-    if matches!(building.kind, BuildingKind::MissileSilo | BuildingKind::SAM)
+    let level = building.active_level();
+    let charge_cap = match building.kind {
+        BuildingKind::MissileSilo | BuildingKind::SAM => level,
+        BuildingKind::Tower | BuildingKind::MilitaryCamp if level >= 5 => level.saturating_sub(4),
+        _ => 0,
+    };
+    if charge_cap > 0
         && let Some(engine) = app.sim.engine.as_ref()
     {
-        let level = building.active_level();
-        let charges = engine.nuclear_charges(building.id, level);
-        chips.push(serde_json::json!({"icon": "radiation", "label": format!("{charges}/{level}")}));
+        let charges = engine.nuclear_charges(building.id, charge_cap);
+        chips.push(
+            serde_json::json!({"icon": "radiation", "label": format!("{charges}/{charge_cap}")}),
+        );
         let wait = engine.nuclear_wait_ticks(building.id);
         if wait > 0 {
             chips.push(serde_json::json!({"icon": "clock", "label": format!("{:.1}s", f64::from(wait) * f64::from(app.sim.config.tick_rate_ms) / 1000.0)}));
@@ -4264,7 +4321,8 @@ fn building_detail_payload(
     } else if let Some(arsenal) = building.arsenal_build {
         let total = arsenal.total_ticks.max(1);
         let rem_secs = (f64::from(arsenal.ticks_until_complete) * tick_ms / 1000.0).max(0.0);
-        let prog = (1.0 - f64::from(arsenal.ticks_until_complete) / f64::from(total)).clamp(0.0, 1.0);
+        let prog =
+            (1.0 - f64::from(arsenal.ticks_until_complete) / f64::from(total)).clamp(0.0, 1.0);
         Some(serde_json::json!({
             "kind": arsenal_kind_str(arsenal.kind),
             "active_level": 0,
@@ -4284,14 +4342,19 @@ fn building_detail_payload(
     let progress = construction
         .as_ref()
         .and_then(|c| c.get("progress").and_then(|v| v.as_f64()))
-        .or_else(|| panel.as_ref().and_then(|panel| panel.progress.map(f64::from)));
+        .or_else(|| {
+            panel
+                .as_ref()
+                .and_then(|panel| panel.progress.map(f64::from))
+        });
     let under_construction = building.under_construction || construction.is_some();
 
     let coastal = building.kind == BuildingKind::Port
         && app.structure_touches_water(BuildingKind::Port, building.tile_idx);
-    let railway_connected = snapshot.railway_tracks.iter().any(|track| {
-        track.from_node_id == building.id || track.to_node_id == building.id
-    });
+    let railway_connected = snapshot
+        .railway_tracks
+        .iter()
+        .any(|track| track.from_node_id == building.id || track.to_node_id == building.id);
     let visual_level = building.active_level();
 
     let production = match building.kind {
@@ -4301,20 +4364,18 @@ fn building_detail_payload(
                 .iter()
                 .filter(|candidate| candidate.owner_id == my_id)
                 .map(|candidate| {
-                    candidate
-                        .warship_queue
-                        .len()
-                        .max(usize::from(candidate.arsenal_build.is_some_and(|build| {
-                            build.kind == CityArsenalKind::Warship
-                        }))) as u32
+                    candidate.warship_queue.len().max(usize::from(
+                        candidate
+                            .arsenal_build
+                            .is_some_and(|build| build.kind == CityArsenalKind::Warship),
+                    )) as u32
                 })
                 .sum();
             let owned_warships = snapshot
                 .fleets
                 .iter()
                 .filter(|fleet| {
-                    fleet.owner_id == my_id
-                        && fleet.unit_type == sow_core::game::UnitType::Warship
+                    fleet.owner_id == my_id && fleet.unit_type == sow_core::game::UnitType::Warship
                 })
                 .count() as u32
                 + queued_warships;
@@ -4328,9 +4389,8 @@ fn building_detail_payload(
                 .ceil() as u32;
             let campaign_unlocked =
                 app.campaign_action_unlocked(sow_core::campaign::CampaignAction::Warship);
-            let capacity_ok = player.is_some_and(|p| {
-                p.boats_in_use.saturating_add(queued_warships) < p.boat_capacity
-            });
+            let capacity_ok = player
+                .is_some_and(|p| p.boats_in_use.saturating_add(queued_warships) < p.boat_capacity);
             let queue_items: Vec<serde_json::Value> = if !building.warship_queue.is_empty() {
                 building
                     .warship_queue
@@ -4340,9 +4400,8 @@ fn building_detail_payload(
                         let total = item.total_ticks.max(1);
                         let rem_secs =
                             (f64::from(item.ticks_until_complete) * tick_ms / 1000.0).max(0.0);
-                        let prog = (1.0
-                            - f64::from(item.ticks_until_complete) / f64::from(total))
-                        .clamp(0.0, 1.0);
+                        let prog = (1.0 - f64::from(item.ticks_until_complete) / f64::from(total))
+                            .clamp(0.0, 1.0);
                         serde_json::json!({
                             "index": idx,
                             "remaining_seconds": rem_secs,
@@ -4357,8 +4416,8 @@ fn building_detail_payload(
             {
                 let total = item.total_ticks.max(1);
                 let rem_secs = (f64::from(item.ticks_until_complete) * tick_ms / 1000.0).max(0.0);
-                let prog = (1.0 - f64::from(item.ticks_until_complete) / f64::from(total))
-                    .clamp(0.0, 1.0);
+                let prog =
+                    (1.0 - f64::from(item.ticks_until_complete) / f64::from(total)).clamp(0.0, 1.0);
                 vec![serde_json::json!({
                     "index": 0,
                     "remaining_seconds": rem_secs,
@@ -4398,17 +4457,163 @@ fn building_detail_payload(
         _ => None,
     };
 
+    let (city_radius, district_options, districts) = if building.kind == BuildingKind::City {
+        let map_w = app.sim.map_w.max(1);
+        let city_level = building.active_level();
+        let radius = if city_level > 0 {
+            sow_core::building::city_construction_radius(city_level, &app.sim.config)
+        } else {
+            0
+        };
+        let cx = building.tile_idx % map_w;
+        let cy = building.tile_idx / map_w;
+        let anchor = sow_core::building::CityAnchor {
+            id: building.id,
+            owner_id: building.owner_id,
+            x: cx,
+            y: cy,
+            active_level: city_level,
+            level: building.level,
+        };
+        let has_coastal_site = if city_level > 0 {
+            app.sim.engine.as_ref().is_some_and(|engine| {
+                let map = &engine.state.map;
+                let min_x = cx.saturating_sub(radius);
+                let max_x = (cx + radius).min(map.width.saturating_sub(1));
+                let min_y = cy.saturating_sub(radius);
+                let max_y = (cy + radius).min(map.height.saturating_sub(1));
+                (min_y..=max_y).any(|y| {
+                    (min_x..=max_x).any(|x| {
+                        sow_core::building::city_covers_coord(anchor, x, y, &app.sim.config)
+                            && map.owner_id(x, y) == my_id
+                            && sow_core::building::structure_footprint_touches_water(
+                                BuildingKind::Port,
+                                x,
+                                y,
+                                map.width,
+                                map.height,
+                                |fx, fy| map.terrain[(fy * map.width + fx) as usize].as_byte(),
+                            )
+                    })
+                })
+            })
+        } else {
+            false
+        };
+        let options: Vec<serde_json::Value> = BuildingKind::ACTIVE_DISTRICTS
+            .iter()
+            .map(|&kind| {
+                let cost = app.ui.app.hud_state.building_costs[kind as usize];
+                let unlocked = app.campaign_building_max_level(kind) >= 1;
+                let coastal_ok = kind != BuildingKind::Port || has_coastal_site;
+                let affordable = cost.is_finite() && gold >= cost;
+                serde_json::json!({
+                    "kind": kind.as_str(),
+                    "cost": cost,
+                    "unlocked": unlocked,
+                    "coast_required": kind == BuildingKind::Port && !has_coastal_site,
+                    "enabled": !under_construction && city_level >= 1 && unlocked && coastal_ok && affordable,
+                })
+            })
+            .collect();
+        let covered_districts: Vec<serde_json::Value> = if city_level > 0 {
+            snapshot
+                .buildings
+                .iter()
+                .filter(|d| {
+                    d.id != building.id
+                        && d.owner_id == my_id
+                        && d.kind.is_non_city()
+                        && d.kind.is_enabled()
+                        && sow_core::building::city_covers_coord(
+                            anchor,
+                            d.tile_idx % map_w,
+                            d.tile_idx / map_w,
+                            &app.sim.config,
+                        )
+                })
+                .map(|d| {
+                    let d_level = d.active_level();
+                    let reserved = d.level.max(d.upgrade_target_level);
+                    let next_level = reserved.saturating_add(1);
+                    let max_lvl = d.kind.max_level();
+                    let city_cap = app.sim.engine.as_ref().map_or(city_level, |engine| {
+                        engine
+                            .buildings
+                            .iter()
+                            .find(|sb| sb.id == d.id)
+                            .map_or(city_level, |sb| engine.building_upgrade_level_cap(*sb))
+                    });
+                    let campaign_max = app.campaign_building_max_level(d.kind);
+                    let cap = max_lvl.min(city_cap).min(campaign_max);
+                    let d_upgrade = if !d.under_construction && next_level <= cap {
+                        app.sim
+                            .engine
+                            .as_ref()
+                            .and_then(|engine| engine.structure_upgrade_quote(d.id))
+                            .map(|(cost, ticks)| {
+                                serde_json::json!({
+                                    "next_level": next_level,
+                                    "cost": cost,
+                                    "seconds": (f64::from(ticks) * tick_ms / 1000.0).ceil(),
+                                    "enabled": cost.is_finite() && gold >= cost,
+                                })
+                            })
+                    } else {
+                        None
+                    };
+                    let d_rem = d
+                        .under_construction
+                        .then_some((f64::from(d.ticks_until_complete) * tick_ms / 1000.0).max(0.0));
+                    serde_json::json!({
+                        "building_id": d.id,
+                        "tile_idx": d.tile_idx,
+                        "kind": d.kind.as_str(),
+                        "level": d_level,
+                        "max_level": max_lvl,
+                        "city_capped": d_level >= city_cap && d_level < max_lvl,
+                        "under_construction": d.under_construction,
+                        "remaining_seconds": d_rem,
+                        "upgrade": d_upgrade,
+                    })
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        (Some(radius), options, covered_districts)
+    } else {
+        (None, Vec::new(), Vec::new())
+    };
+    let active_level = building.active_level();
+    let sam_active = building.kind == BuildingKind::Tower && active_level >= 5;
+    let nuclear_tier = if building.kind == BuildingKind::MilitaryCamp {
+        match active_level {
+            7.. => Some("mirv"),
+            6 => Some("hydrogen"),
+            5 => Some("atom"),
+            _ => None,
+        }
+    } else {
+        None
+    };
+
     serde_json::json!({
         "building_id": building.id,
         "tile_idx": building.tile_idx,
         "kind": building.kind.as_str(),
-        "level": building.active_level(),
+        "level": active_level,
         "visual_level": visual_level,
         "max_level": building.kind.max_level(),
         "under_construction": under_construction,
         "city_foundation": building.under_construction && building.kind == BuildingKind::City,
         "coastal": coastal,
         "railway_connected": railway_connected,
+        "sam_active": sam_active,
+        "nuclear_tier": nuclear_tier,
+        "city_radius": city_radius,
+        "district_options": district_options,
+        "districts": districts,
         "construction": construction,
         "production": production,
         "anchor_x": anchor_x,
@@ -4624,10 +4829,41 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             "down": [controls.arrows[2].1[0] / screen_scale, controls.arrows[2].1[1] / screen_scale],
             "left": [controls.arrows[3].1[0] / screen_scale, controls.arrows[3].1[1] / screen_scale],
         });
+        let site_traits = if placement.kind == sow_core::game::BuildingKind::City {
+            app.sim.engine.as_ref().and_then(|engine| {
+                let w = engine.state.map.width;
+                if w == 0 || placement.tile_idx >= w.saturating_mul(engine.state.map.height) {
+                    return None;
+                }
+                let cities = sow_core::building::city_anchors_from_buildings(
+                    &engine.buildings,
+                    w,
+                );
+                let traits = sow_core::building::evaluate_city_site_traits(
+                    &engine.state.map,
+                    placement.tile_idx % w,
+                    placement.tile_idx / w,
+                    &cities,
+                    &engine.state.config,
+                );
+                Some(serde_json::json!({
+                    "coastal": traits.has_coastal_port_access,
+                    "mountain_bonus": traits.highland_tiles > 0 || traits.mountain_tiles > 0,
+                    "forest_bonus": false,
+                    "too_close_to_city": traits.blocked_by_city_spacing,
+                    "initial_radius": sow_core::building::city_construction_radius(1, &engine.state.config),
+                    "exclusion_radius": sow_core::building::city_exclusion_radius(1, &engine.state.config),
+                }))
+            })
+        } else {
+            None
+        };
         serde_json::json!({
             "pending": placement.pending,
             "can_confirm": placement_can_confirm,
             "kind": placement.kind.as_str(),
+            "city_id": placement.city_id,
+            "site_traits": site_traits,
             "level": app.building_foundation_level(placement.kind),
             "tile_idx": placement.tile_idx,
             "anchor_x": controls.center[0] / screen_scale,
@@ -4729,26 +4965,22 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                     .iter()
                     .filter_map(|item| item.get("action").and_then(|action| action.as_str()))
                     .collect::<Vec<_>>();
-                let building = app
-                    .sim
-                    .current_snapshot
-                    .as_ref()
-                    .and_then(|snapshot| {
-                        let b = snapshot
-                            .buildings
-                            .iter()
-                            .find(|building| {
-                                building.tile_idx == menu.tile_idx
-                                    && building.kind == sow_core::game::BuildingKind::City
-                            })
-                            .or_else(|| {
-                                snapshot
-                                    .buildings
-                                    .iter()
-                                    .find(|building| building.tile_idx == menu.tile_idx)
-                            })?;
-                        Some(building_detail_payload(app, snapshot, b, screen_scale))
-                    });
+                let building = app.sim.current_snapshot.as_ref().and_then(|snapshot| {
+                    let b = snapshot
+                        .buildings
+                        .iter()
+                        .find(|building| {
+                            building.tile_idx == menu.tile_idx
+                                && building.kind == sow_core::game::BuildingKind::City
+                        })
+                        .or_else(|| {
+                            snapshot
+                                .buildings
+                                .iter()
+                                .find(|building| building.tile_idx == menu.tile_idx)
+                        })?;
+                    Some(building_detail_payload(app, snapshot, b, screen_scale))
+                });
                 serde_json::json!({
                     "open": true,
                     "view": match menu.view {
@@ -4834,8 +5066,9 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             sow_core::game::BuildingKind::TradingPost => "TradingPost",
             sow_core::game::BuildingKind::Port => "Port",
             sow_core::game::BuildingKind::MilitaryCamp => "MilitaryCamp",
+            sow_core::game::BuildingKind::Farm => "Farm",
             sow_core::game::BuildingKind::MissileSilo => "MissileSilo",
-                            sow_core::game::BuildingKind::SAM => "SAM",
+            sow_core::game::BuildingKind::SAM => "SAM",
         });
     let selected_nuke = hud.selected_nuke_kind.map(|kind| match kind {
         sow_core::game::NukeKind::AtomBomb => "AtomBomb",
@@ -5042,7 +5275,11 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                         sow_core::game::BuildingKind::City | sow_core::game::BuildingKind::Port
                     )
             }) {
-                let Some(arsenal) = building.warship_queue.first().copied().or(building.arsenal_build)
+                let Some(arsenal) = building
+                    .warship_queue
+                    .first()
+                    .copied()
+                    .or(building.arsenal_build)
                 else {
                     continue;
                 };
@@ -5050,9 +5287,8 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                 let remaining_seconds =
                     (f64::from(arsenal.ticks_until_complete) * f64::from(tick_rate_ms) / 1000.0)
                         .max(0.0);
-                let progress =
-                    (1.0 - f64::from(arsenal.ticks_until_complete) / f64::from(total))
-                        .clamp(0.0, 1.0);
+                let progress = (1.0 - f64::from(arsenal.ticks_until_complete) / f64::from(total))
+                    .clamp(0.0, 1.0);
                 let visual_level = building.active_level();
                 let [bx, by] = crate::render::world::overlays::building_world_center(
                     building.kind,
@@ -5104,9 +5340,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                         return None;
                     }
                     let [bx, by] = crate::render::world::overlays::building_world_center(
-                        kind,
-                        tile_idx,
-                        map_w,
+                        kind, tile_idx, map_w,
                     );
                     let [screen_x, screen_y] =
                         crate::render::world::overlays::building_screen_anchor_bottom(
@@ -5294,6 +5528,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             "military_camp": costs[4],
             "sam": costs[5],
             "missilesilo": costs[6],
+            "farm": costs[7],
         },
         "emotes": sow_core::emote::EMOTES,
         "emote_active": me.is_some_and(|player| player.emote_active),
@@ -5338,13 +5573,20 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
     if match_over && !app.sim.config.tutorial {
         if let Some(snapshot) = snapshot {
             let reason = if let Some(winner) = snapshot.winner {
-                let winning_tiles: u32 = snapshot.players.iter().filter(|player| {
-                    player.alive && snapshot.winning_team.map_or(player.id == winner, |team| {
-                        player.team == Some(team)
+                let winning_tiles: u32 = snapshot
+                    .players
+                    .iter()
+                    .filter(|player| {
+                        player.alive
+                            && snapshot
+                                .winning_team
+                                .map_or(player.id == winner, |team| player.team == Some(team))
                     })
-                }).map(|player| player.tile_count).sum();
+                    .map(|player| player.tile_count)
+                    .sum();
                 let threshold = (snapshot.total_land_tiles.max(1) as f32
-                    * app.sim.config.map_control_win_percentage).ceil() as u32;
+                    * app.sim.config.map_control_win_percentage)
+                    .ceil() as u32;
                 if winning_tiles >= threshold {
                     "territory"
                 } else if app.sim.config.ranked_1v1 {
@@ -5391,17 +5633,22 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
 
     if let Some(snapshot) = snapshot {
         if app.ui.show_leaderboard && include_leaderboard {
-            payload["leaderboard"] =
-                build_leaderboard(snapshot, my_pid, app.sim.engine.as_ref());
+            payload["leaderboard"] = build_leaderboard(snapshot, my_pid, app.sim.engine.as_ref());
         }
         if !app.sim.config.tutorial
             && (app.sim.config.game_mode == "Teams"
                 || sow_core::game_config::is_coop_game_mode(&app.sim.config.game_mode))
         {
             payload["team_leaderboard"] = build_team_leaderboard(snapshot);
-            payload["territory_goal"] = serde_json::json!(app.sim.config.map_control_win_percentage);
-            payload["local_team"] = serde_json::json!(snapshot.players.iter()
-                .find(|player| player.id == my_pid).and_then(|player| player.team));
+            payload["territory_goal"] =
+                serde_json::json!(app.sim.config.map_control_win_percentage);
+            payload["local_team"] = serde_json::json!(
+                snapshot
+                    .players
+                    .iter()
+                    .find(|player| player.id == my_pid)
+                    .and_then(|player| player.team)
+            );
         }
         if let Some(seconds) = match_clock_seconds(app, snapshot) {
             payload["match_clock_seconds"] = serde_json::json!(seconds);
@@ -5451,11 +5698,15 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             .is_some_and(|engine| engine.campaign_unlocks.is_none());
     append_player_dialog_payloads(&mut payload, snapshot, hud, my_pid, team_betrayal_enabled);
     if let Some(snapshot) = snapshot {
-        let needs_map = payload["leaderboard"].as_array().is_some_and(|a| a.len() > 4)
+        let needs_map = payload["leaderboard"]
+            .as_array()
+            .is_some_and(|a| a.len() > 4)
             || payload["players"].as_array().is_some_and(|a| a.len() > 4)
-            || payload["operations"].as_array().is_some_and(|a| a.len() > 4);
-        let players_by_id: Option<HashMap<u16, &sow_core::protocol::PlayerSnapshot>> =
-            needs_map.then(|| {
+            || payload["operations"]
+                .as_array()
+                .is_some_and(|a| a.len() > 4);
+        let players_by_id: Option<HashMap<u16, &sow_core::protocol::PlayerSnapshot>> = needs_map
+            .then(|| {
                 snapshot
                     .players
                     .iter()
@@ -5814,9 +6065,14 @@ pub(crate) fn publish_hover_card(app: &SowApp) {
         .my_player_id
         .unwrap_or(app.ui.app.hud_state.my_player_id);
     let snapshot = app.sim.current_snapshot.as_ref();
-    let hover_input = snapshot
-        .filter(|_| hovered_owner != 0)
-        .map(|s| (s.tick, hovered_owner, my_pid, app.ui.nameplates.avatar_revision));
+    let hover_input = snapshot.filter(|_| hovered_owner != 0).map(|s| {
+        (
+            s.tick,
+            hovered_owner,
+            my_pid,
+            app.ui.nameplates.avatar_revision,
+        )
+    });
     let unchanged_input = LAST_HOVER_INPUT.with(|last| {
         if last.get() == Some(hover_input) {
             true
@@ -5884,7 +6140,10 @@ pub(crate) fn publish_diagnostics(app: &SowApp) {
     let Some(window) = web_sys::window() else {
         return;
     };
-    let Ok(function) = js_sys::Reflect::get(window.as_ref(), &JsValue::from_str("SOW_diagnostics_update")) else {
+    let Ok(function) = js_sys::Reflect::get(
+        window.as_ref(),
+        &JsValue::from_str("SOW_diagnostics_update"),
+    ) else {
         return;
     };
     let Ok(update) = function.dyn_into::<js_sys::Function>() else {
@@ -5904,8 +6163,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
 
     let payload = if app.ui.app.phase == crate::ClientPhase::Playing {
         LAST_MENU_INPUTS.with(|last| *last.borrow_mut() = None);
-        let include_leaderboard = if app.ui.show_leaderboard && app.sim.current_snapshot.is_some()
-        {
+        let include_leaderboard = if app.ui.show_leaderboard && app.sim.current_snapshot.is_some() {
             let now = Instant::now();
             let due = app.ui.leaderboard_publish_pending
                 || app.ui.leaderboard_refresh_at.map_or(true, |last| {
@@ -6040,6 +6298,7 @@ struct MenuInputs {
     connecting: bool,
     waiting: bool,
     ranked_search_active: bool,
+    ranked_ffa_search_active: bool,
     ranked_search_elapsed_secs: u32,
     ranked_matchup: Option<sow_core::protocol::LobbyInfo>,
     update_available: bool,
@@ -6107,6 +6366,7 @@ fn menu_inputs(app: &SowApp) -> MenuInputs {
         connecting: state.is_connecting,
         waiting: state.is_waiting,
         ranked_search_active: state.ranked_search_active,
+        ranked_ffa_search_active: state.ranked_ffa_search_active,
         ranked_search_elapsed_secs: state.ranked_search_elapsed_secs,
         ranked_matchup: if (app.ui.app.phase == crate::ClientPhase::MainMenu && state.is_waiting)
             || (app.ui.app.phase == crate::ClientPhase::Splash
@@ -6269,10 +6529,8 @@ fn menu_payload(inputs: &MenuInputs) -> serde_json::Value {
         &progress.completed_episodes,
     );
     let six_sky_maya_01_completed = progress.completed_episodes.contains("six_sky_maya_01");
-    let lady_six_sky_episodes_completed = sow_data::campaign::series_completed_count(
-        "lady_six_sky",
-        &progress.completed_episodes,
-    );
+    let lady_six_sky_episodes_completed =
+        sow_data::campaign::series_completed_count("lady_six_sky", &progress.completed_episodes);
     sow_data::missions::sync_hands_for_periods(
         sow_data::missions::HandSyncState {
             records: &mut period_records,
@@ -6332,6 +6590,7 @@ fn menu_payload(inputs: &MenuInputs) -> serde_json::Value {
         "update_available": inputs.update_available,
         "waiting": inputs.waiting,
         "ranked_search_active": inputs.ranked_search_active,
+        "ranked_ffa_search_active": inputs.ranked_ffa_search_active,
         "ranked_search_elapsed_secs": inputs.ranked_search_elapsed_secs,
         "ranked_matchup": inputs.ranked_matchup,
         "match_preparing": inputs.match_preparing,
@@ -6415,4 +6674,3 @@ fn menu_payload(inputs: &MenuInputs) -> serde_json::Value {
         "settings": inputs.settings,
     })
 }
-

@@ -26,10 +26,28 @@ pub const PENDING_REPLAY_VERIFICATIONS_TABLE: TableDefinition<&str, &[u8]> =
     TableDefinition::new("pending_replay_verifications");
 pub const VERIFIED_VICTORY_BOARD_TABLE: TableDefinition<&str, &[u8]> =
     TableDefinition::new("verified_victory_board");
+pub const RANKED_LEADERBOARD_TABLE: TableDefinition<&str, &[u8]> =
+    TableDefinition::new("ranked_leaderboard");
 pub const PENDING_CRAZYGAMES_SCORES_TABLE: TableDefinition<&str, &[u8]> =
     TableDefinition::new("pending_crazygames_scores");
 pub const HERO_ROTATIONS_TABLE: TableDefinition<&str, &[u8]> =
     TableDefinition::new("hero_rotations");
+
+/// Canonical sorted Redb key ordering entries by score desc, wins desc, account_id asc.
+pub fn ranked_leaderboard_key(
+    season_id: u32,
+    queue: &str,
+    mode: &str,
+    score: u16,
+    wins: u32,
+    account_id: &str,
+) -> String {
+    format!(
+        "{season_id:08}:{queue}:{mode}:{:05}:{:010}:{account_id}",
+        u16::MAX.saturating_sub(score),
+        u32::MAX.saturating_sub(wins),
+    )
+}
 
 const HERO_ROTATION_STATE_KEY: &str = "state";
 
@@ -64,6 +82,10 @@ pub fn init_database<P: AsRef<Path>>(path: P) -> Result<Database, Box<dyn std::e
         .begin_read()?
         .open_table(PENDING_CRAZYGAMES_SCORES_TABLE)
         .is_ok();
+    let ranked_board_exists = db
+        .begin_read()?
+        .open_table(RANKED_LEADERBOARD_TABLE)
+        .is_ok();
     let write_txn = db.begin_write()?;
     write_txn.open_table(PLAYERS_TABLE)?;
     write_txn.open_table(crate::auth::SESSIONS)?;
@@ -80,6 +102,7 @@ pub fn init_database<P: AsRef<Path>>(path: P) -> Result<Database, Box<dyn std::e
     write_txn.open_table(MATCH_ID_ALLOCATOR_TABLE)?;
     write_txn.open_table(PENDING_REPLAY_VERIFICATIONS_TABLE)?;
     write_txn.open_table(VERIFIED_VICTORY_BOARD_TABLE)?;
+    write_txn.open_table(RANKED_LEADERBOARD_TABLE)?;
     write_txn.open_table(PENDING_CRAZYGAMES_SCORES_TABLE)?;
     write_txn.open_table(HERO_ROTATIONS_TABLE)?;
     if !score_index_exists {
@@ -96,6 +119,68 @@ pub fn init_database<P: AsRef<Path>>(path: P) -> Result<Database, Box<dyn std::e
                     > account.profile.crazygames_synced_revision
             {
                 pending.insert(key.value(), b"1".as_slice())?;
+            }
+        }
+    }
+    if !ranked_board_exists {
+        let mut backfilled = Vec::new();
+        {
+            let players = write_txn.open_table(PLAYERS_TABLE)?;
+            let ratings = write_txn.open_table(SEASON_RATINGS_TABLE)?;
+            for row in ratings.iter()? {
+                let (_, bytes) = row?;
+                let mut rating: crate::profile::SeasonRating =
+                    serde_json::from_slice(bytes.value())?;
+                rating.normalize_ladder();
+                let Some(player_bytes) = players.get(rating.account_id.as_str())? else {
+                    continue;
+                };
+                let account: crate::db::PlayerAccount =
+                    crate::db::parse_account(player_bytes.value())?;
+                if account.kind == crate::db::AccountKind::Bot
+                    && !(rating.queue == "RankedFFA"
+                        || (rating.queue == "Ranked1v1" && account.profile.ranked_bot.is_some()))
+                {
+                    continue;
+                }
+                let entry_key = ranked_leaderboard_key(
+                    rating.season_id,
+                    &rating.queue,
+                    &rating.mode,
+                    rating.score,
+                    rating.wins,
+                    &account.id,
+                );
+                let entry = crate::profile::PublicLeaderboardEntry {
+                    rank: 0,
+                    account_id: account.id.clone(),
+                    handle: crate::profile::public_handle(&account.display_name, &account.id),
+                    is_bot: false,
+                    queue: rating.queue,
+                    mode: rating.mode,
+                    score: rating.score,
+                    tier: rating.tier,
+                    division: rating.division,
+                    games_played: rating.games_played,
+                    wins: rating.wins,
+                    peak_score: rating.peak_score,
+                    win_rate: crate::profile::win_rate(rating.wins, rating.games_played),
+                    win_streak: rating.win_streak,
+                    level: account.profile.level,
+                    preferred_leader: account
+                        .profile
+                        .preferred_leader
+                        .clone()
+                        .or_else(|| account.profile.ranked_bot.as_ref().map(|bot| bot.leader.clone())),
+                    updated_at: rating.updated_at,
+                };
+                backfilled.push((entry_key, serde_json::to_vec(&entry)?));
+            }
+        }
+        if !backfilled.is_empty() {
+            let mut board = write_txn.open_table(RANKED_LEADERBOARD_TABLE)?;
+            for (entry_key, payload) in backfilled {
+                board.insert(entry_key.as_str(), payload.as_slice())?;
             }
         }
     }

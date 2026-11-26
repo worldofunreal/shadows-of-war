@@ -63,6 +63,7 @@ impl SowApp {
             host_config,
             password,
             ranked_1v1: self.join_matchmaking,
+            ranked_ffa: self.join_ranked_ffa,
         };
         self.make_auth_proof()
             .map(|auth| sow_core::protocol::ClientMessage::JoinWithAuth {
@@ -126,8 +127,9 @@ impl SowApp {
     }
 
     pub(crate) fn send_leave_message(&mut self) {
-        let cancel_matchmaking =
-            self.ui.app.main_menu_state.ranked_search_active && self.sim.my_lobby_id.is_none();
+        let cancel_matchmaking = self.join_matchmaking
+            && self.ui.app.main_menu_state.ranked_search_active
+            && self.sim.my_lobby_id.is_none();
         if cancel_matchmaking {
             if let Some(started_at) = self.portal_join_started_at.take() {
                 crate::store_portals::track_product_event_with(
@@ -178,6 +180,7 @@ impl SowApp {
     fn clear_lobby_exit_state(&mut self) {
         self.ui.app.main_menu_state.is_waiting = false;
         self.ui.app.main_menu_state.ranked_search_active = false;
+        self.ui.app.main_menu_state.ranked_ffa_search_active = false;
         self.ui.app.main_menu_state.ranked_search_elapsed_secs = 0;
         clear_lobby_snapshot(&mut self.ui.app.main_menu_state);
         self.ui.app.main_menu_state.go_home();
@@ -190,6 +193,7 @@ impl SowApp {
         self.join_waiting_for_identity = false;
         self.join_matchmaking = false;
         self.join_public_matchmaking = false;
+        self.join_ranked_ffa = false;
         self.ui.app.hud_state.sync_state = None;
         self.sim.my_lobby_id = None;
         self.sim.my_player_id = None;
@@ -249,7 +253,7 @@ impl SowApp {
             && !was_spectating
             && self.ui.tutorial_active
             && self.ui.tutorial_campaign.is_server_owned_tutorial())
-            .then(|| "tutorial".to_string());
+        .then(|| "tutorial".to_string());
         // Every active tutorial exit joins the same one-time server reward and
         // welcome handoff, including the HUD's Leave tutorial button.
         if tutorial_reward_id.is_some() {
@@ -420,4 +424,3 @@ impl SowApp {
             || menu.ranked_search_active
     }
 }
-

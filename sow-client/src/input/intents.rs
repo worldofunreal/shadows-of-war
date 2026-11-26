@@ -46,6 +46,7 @@ fn paused_tutorial_intent_allowed(
                     *kind,
                     sow_core::game::BuildingKind::City
                         | sow_core::game::BuildingKind::MilitaryCamp
+                        | sow_core::game::BuildingKind::Farm
                         | sow_core::game::BuildingKind::TradingPost
                         | sow_core::game::BuildingKind::Port
                         | sow_core::game::BuildingKind::Tower
@@ -108,6 +109,7 @@ fn paused_tutorial_progress(
             let key = match *kind {
                 sow_core::game::BuildingKind::City => "cities",
                 sow_core::game::BuildingKind::MilitaryCamp => "military_camps",
+                sow_core::game::BuildingKind::Farm => "farms",
                 sow_core::game::BuildingKind::TradingPost => "trading_posts",
                 sow_core::game::BuildingKind::Port => "ports",
                 sow_core::game::BuildingKind::Tower => "towers",

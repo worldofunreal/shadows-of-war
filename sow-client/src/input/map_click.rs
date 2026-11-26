@@ -44,6 +44,7 @@ pub(crate) enum MapMenuAction {
     BuildTradingPost,
     BuildPort,
     BuildMilitaryCamp,
+    BuildFarm,
     BuildSam,
     BuildMissileSilo,
     UpgradeStructure,
@@ -60,6 +61,7 @@ impl MapMenuAction {
             Self::BuildTradingPost => Some(BuildingKind::TradingPost),
             Self::BuildPort => Some(BuildingKind::Port),
             Self::BuildMilitaryCamp => Some(BuildingKind::MilitaryCamp),
+            Self::BuildFarm => Some(BuildingKind::Farm),
             Self::BuildSam => Some(BuildingKind::SAM),
             Self::BuildMissileSilo => Some(BuildingKind::MissileSilo),
             _ => None,
@@ -81,6 +83,7 @@ impl MapMenuAction {
             Self::BuildTradingPost => "build_trading_post",
             Self::BuildPort => "build_port",
             Self::BuildMilitaryCamp => "build_military_camp",
+            Self::BuildFarm => "build_farm",
             Self::BuildSam => "build_sam",
             Self::BuildMissileSilo => "build_missile_silo",
             Self::UpgradeStructure => "upgrade_structure",
@@ -205,18 +208,7 @@ impl MapTarget {
                 .collect();
         }
         if self.owner == self.my_id && self.is_land {
-            return [
-                MapMenuAction::BuildCity,
-                MapMenuAction::BuildTradingPost,
-                MapMenuAction::BuildPort,
-                MapMenuAction::BuildTower,
-                MapMenuAction::BuildMilitaryCamp,
-                MapMenuAction::BuildSam,
-                MapMenuAction::BuildMissileSilo,
-            ]
-            .into_iter()
-            .filter(|action| action.building_kind().is_none_or(|kind| kind.is_enabled()))
-            .collect();
+            return vec![MapMenuAction::BuildCity];
         }
         if self.owner == 0 {
             let mut actions = Vec::new();
@@ -841,7 +833,23 @@ impl SowApp {
         });
         match building {
             Some(building) if !building.under_construction => {
+                let level_cap = self.sim.engine.as_ref().map_or_else(
+                    || building.kind.max_level(),
+                    |engine| {
+                        self.sim
+                            .engine
+                            .as_ref()
+                            .and_then(|e| {
+                                e.buildings.iter().find(|sb| sb.id == building.id)
+                            })
+                            .map_or_else(
+                                || building.kind.max_level(),
+                                |sb| engine.building_upgrade_level_cap(*sb),
+                            )
+                    },
+                );
                 if building.level < building.kind.max_level()
+                    && building.level < level_cap
                     && building.level.saturating_add(1)
                         <= self.campaign_building_max_level(building.kind)
                 {
@@ -851,20 +859,31 @@ impl SowApp {
             Some(_) => {}
             None => {
                 if let Some((col, row)) = self.tile_coords(tile_idx) {
-                    for action in [
-                        MapMenuAction::BuildCity,
-                        MapMenuAction::BuildTradingPost,
-                        MapMenuAction::BuildPort,
-                        MapMenuAction::BuildTower,
-                        MapMenuAction::BuildMilitaryCamp,
-                        MapMenuAction::BuildSam,
-                MapMenuAction::BuildMissileSilo,
-                    ] {
+                    let legacy = self
+                        .sim
+                        .engine
+                        .as_ref()
+                        .is_some_and(|engine| engine.legacy_building_rules);
+                    let candidates: &[MapMenuAction] = if legacy {
+                        &[
+                            MapMenuAction::BuildCity,
+                            MapMenuAction::BuildTradingPost,
+                            MapMenuAction::BuildPort,
+                            MapMenuAction::BuildTower,
+                            MapMenuAction::BuildMilitaryCamp,
+                            MapMenuAction::BuildFarm,
+                            MapMenuAction::BuildSam,
+                            MapMenuAction::BuildMissileSilo,
+                        ]
+                    } else {
+                        &[MapMenuAction::BuildCity]
+                    };
+                    for &action in candidates {
                         let Some(kind) = action.building_kind() else {
                             continue;
                         };
                         if self.campaign_building_max_level(kind) >= 1
-                            && self.resolve_building_target(kind, col, row).is_ok()
+                            && self.resolve_building_target(kind, col, row, None).is_ok()
                         {
                             actions.push(action);
                         }
@@ -1090,6 +1109,9 @@ impl SowApp {
             MapMenuAction::BuildMilitaryCamp => {
                 self.start_building_from_map_menu(sow_core::game::BuildingKind::MilitaryCamp, tile_idx);
             }
+            MapMenuAction::BuildFarm => {
+                self.start_building_from_map_menu(sow_core::game::BuildingKind::Farm, tile_idx);
+            }
             MapMenuAction::BuildMissileSilo => {
                 self.start_building_from_map_menu(sow_core::game::BuildingKind::MissileSilo, tile_idx);
             }
@@ -1149,6 +1171,7 @@ impl SowApp {
             Some(crate::ui::hud::state::BuildingPlacement {
                 kind,
                 tile_idx,
+                city_id: None,
                 pending: false,
             });
         self.confirm_building_placement();
@@ -1220,6 +1243,7 @@ impl SowApp {
         x: i32,
         y: i32,
         bounds: (i32, i32, i32, i32),
+        city_id: Option<u64>,
     ) -> Option<u32> {
         let (min_x, min_y, max_x, max_y) = bounds;
         let radius = x
@@ -1229,16 +1253,36 @@ impl SowApp {
             .max(y.abs_diff(max_y)) as i32;
         let engine = self.sim.engine.as_mut()?;
         engine.refresh_building_grid();
-        sow_core::building::nearest_structure_site_in_bounds(
-            &engine.state.map,
-            self.sim.my_player_id.unwrap_or(0),
-            kind,
-            x,
-            y,
-            radius,
-            &engine.building_grid,
-            bounds,
-        )
+        if engine.legacy_building_rules {
+            sow_core::building::nearest_structure_site_in_bounds(
+                &engine.state.map,
+                self.sim.my_player_id.unwrap_or(0),
+                kind,
+                x,
+                y,
+                radius,
+                &engine.building_grid,
+                bounds,
+            )
+        } else {
+            let cities = sow_core::building::city_anchors_from_buildings(
+                &engine.buildings,
+                engine.state.map.width,
+            );
+            sow_core::building::nearest_match_structure_site_in_bounds(
+                &engine.state.map,
+                self.sim.my_player_id.unwrap_or(0),
+                kind,
+                x,
+                y,
+                radius,
+                &engine.building_grid,
+                &cities,
+                city_id,
+                &engine.state.config,
+                bounds,
+            )
+        }
     }
 
     /// Snap to a nearby foundation; keep the requested tile when none is found.
@@ -1268,16 +1312,36 @@ impl SowApp {
         };
         engine.refresh_building_grid();
         let tile = bounds.and_then(|bounds| {
-            sow_core::building::nearest_structure_site_in_bounds(
-                &engine.state.map,
-                self.sim.my_player_id.unwrap_or(0),
-                placement.kind,
-                col,
-                row,
-                PLACEMENT_SNAP_RADIUS,
-                &engine.building_grid,
-                bounds,
-            )
+            if engine.legacy_building_rules {
+                sow_core::building::nearest_structure_site_in_bounds(
+                    &engine.state.map,
+                    self.sim.my_player_id.unwrap_or(0),
+                    placement.kind,
+                    col,
+                    row,
+                    PLACEMENT_SNAP_RADIUS,
+                    &engine.building_grid,
+                    bounds,
+                )
+            } else {
+                let cities = sow_core::building::city_anchors_from_buildings(
+                    &engine.buildings,
+                    engine.state.map.width,
+                );
+                sow_core::building::nearest_match_structure_site_in_bounds(
+                    &engine.state.map,
+                    self.sim.my_player_id.unwrap_or(0),
+                    placement.kind,
+                    col,
+                    row,
+                    PLACEMENT_SNAP_RADIUS,
+                    &engine.building_grid,
+                    &cities,
+                    placement.city_id,
+                    &engine.state.config,
+                    bounds,
+                )
+            }
         });
         let tile_idx = tile.unwrap_or(requested_tile);
         if let Some(placement) = self.ui.app.hud_state.building_placement.as_mut() {
@@ -1344,20 +1408,42 @@ impl SowApp {
             (placement.tile_idx % map.width) as i32,
             (placement.tile_idx / map.width) as i32,
         );
+        let cities = if engine.legacy_building_rules {
+            Vec::new()
+        } else {
+            sow_core::building::city_anchors_from_buildings(
+                &engine.buildings,
+                map.width,
+            )
+        };
         // Arrows jump over blocked tiles to the next legal foundation.
         let next = (1..=PLACEMENT_NUDGE_REACH)
             .map(|step| (x + dx * step, y + dy * step))
             .take_while(|&(nx, ny)| map.is_valid_coord(nx, ny))
             .map(|(nx, ny)| ny as u32 * map.width + nx as u32)
             .find(|&tile| {
-                sow_core::building::validate_structure_site(
-                    map,
-                    my_id,
-                    placement.kind,
-                    tile,
-                    &engine.building_grid,
-                )
-                .is_ok()
+                if engine.legacy_building_rules {
+                    sow_core::building::validate_structure_site(
+                        map,
+                        my_id,
+                        placement.kind,
+                        tile,
+                        &engine.building_grid,
+                    )
+                    .is_ok()
+                } else {
+                    sow_core::building::validate_match_structure_site(
+                        map,
+                        my_id,
+                        placement.kind,
+                        tile,
+                        &engine.building_grid,
+                        &cities,
+                        placement.city_id,
+                        &engine.state.config,
+                    )
+                    .is_ok()
+                }
             });
         if let Some(tile) = next
             && let Some(placement) = self.ui.app.hud_state.building_placement.as_mut()
@@ -1490,6 +1576,7 @@ impl SowApp {
             placement.kind,
             (placement.tile_idx % self.sim.map_w) as i32,
             (placement.tile_idx / self.sim.map_w) as i32,
+            placement.city_id,
         ) {
             return Some(crate::ui::UiText::new(key));
         }
@@ -1526,6 +1613,7 @@ impl SowApp {
         kind: sow_core::game::BuildingKind,
         col: i32,
         row: i32,
+        city_id: Option<u64>,
     ) -> Result<u32, &'static str> {
         if self.sim.map_w == 0 || self.sim.map_h == 0 {
             return Err("hud.action_unavailable");
@@ -1544,15 +1632,34 @@ impl SowApp {
         // Validate against the simulation that will accept the order.
         engine.refresh_building_grid();
         let tile = row as u32 * engine.state.map.width + col as u32;
-        sow_core::building::validate_structure_site(
-            &engine.state.map,
-            self.sim.my_player_id.unwrap_or(0),
-            kind,
-            tile,
-            &engine.building_grid,
-        )
-        .map(|()| tile)
-        .map_err(|error| error.reason_key())
+        if engine.legacy_building_rules {
+            sow_core::building::validate_structure_site(
+                &engine.state.map,
+                self.sim.my_player_id.unwrap_or(0),
+                kind,
+                tile,
+                &engine.building_grid,
+            )
+            .map(|()| tile)
+            .map_err(|error| error.reason_key())
+        } else {
+            let cities = sow_core::building::city_anchors_from_buildings(
+                &engine.buildings,
+                engine.state.map.width,
+            );
+            sow_core::building::validate_match_structure_site(
+                &engine.state.map,
+                self.sim.my_player_id.unwrap_or(0),
+                kind,
+                tile,
+                &engine.building_grid,
+                &cities,
+                city_id,
+                &engine.state.config,
+            )
+            .map(|()| tile)
+            .map_err(|error| error.reason_key())
+        }
     }
 
     pub(crate) fn map_menu_cost(
@@ -1961,6 +2068,25 @@ impl SowApp {
     }
 
     pub(crate) fn select_building_kind(&mut self, kind: sow_core::game::BuildingKind) {
+        self.select_building_kind_in_city(kind, None);
+    }
+
+    pub(crate) fn select_district_kind(
+        &mut self,
+        kind: sow_core::game::BuildingKind,
+        city_id: u64,
+    ) {
+        if kind == sow_core::game::BuildingKind::City {
+            return;
+        }
+        self.select_building_kind_in_city(kind, Some(city_id));
+    }
+
+    fn select_building_kind_in_city(
+        &mut self,
+        kind: sow_core::game::BuildingKind,
+        city_id: Option<u64>,
+    ) {
         if !kind.is_enabled() {
             return;
         }
@@ -1991,7 +2117,7 @@ impl SowApp {
             .app
             .hud_state
             .building_placement
-            .is_some_and(|p| p.kind == kind)
+            .is_some_and(|p| p.kind == kind && p.city_id == city_id)
         {
             self.clear_placement();
             return;
@@ -2000,12 +2126,26 @@ impl SowApp {
             self.add_map_feedback(shortfall);
             return;
         }
-        let [origin_x, origin_y] = self.input.screen_to_world([
-            self.input.screen_w * 0.5,
-            self.input.screen_h * 0.45,
-        ]);
-        let (origin_x, origin_y) = (origin_x as i32, origin_y as i32);
         let my_id = self.sim.my_player_id.unwrap_or(0);
+        let (map_w, map_h) = (self.sim.map_w, self.sim.map_h);
+        if map_w == 0 || map_h == 0 {
+            return;
+        }
+        let city_center = city_id.and_then(|cid| {
+            self.sim.current_snapshot.as_ref().and_then(|snap| {
+                snap.buildings
+                    .iter()
+                    .find(|b| b.id == cid && b.kind == sow_core::game::BuildingKind::City)
+                    .map(|b| ((b.tile_idx % map_w) as i32, (b.tile_idx / map_w) as i32))
+            })
+        });
+        let (origin_x, origin_y) = city_center.unwrap_or_else(|| {
+            let [ox, oy] = self.input.screen_to_world([
+                self.input.screen_w * 0.5,
+                self.input.screen_h * 0.45,
+            ]);
+            (ox as i32, oy as i32)
+        });
         let tutorial_site = if self.ui.tutorial_active
             && self.ui.tutorial_campaign.is_boudica()
             && kind == sow_core::game::BuildingKind::City
@@ -2036,18 +2176,18 @@ impl SowApp {
         } else {
             None
         };
-        let (map_w, map_h) = (self.sim.map_w, self.sim.map_h);
-        if map_w == 0 || map_h == 0 {
-            return;
-        }
         let requested_x = origin_x.clamp(0, map_w as i32 - 1);
         let requested_y = origin_y.clamp(0, map_h as i32 - 1);
         let requested_tile = requested_y as u32 * map_w + requested_x as u32;
         let site = tutorial_site.or_else(|| {
-            self.visible_building_anchor_bounds(kind)
-                .and_then(|bounds| {
-                    self.nearest_visible_structure_site(kind, origin_x, origin_y, bounds)
-                })
+            let bounds = if city_id.is_some() {
+                Some((0, 0, map_w as i32 - 1, map_h as i32 - 1))
+            } else {
+                self.visible_building_anchor_bounds(kind)
+            };
+            bounds.and_then(|bounds| {
+                self.nearest_visible_structure_site(kind, origin_x, origin_y, bounds, city_id)
+            })
         });
         let tile = site.unwrap_or(requested_tile);
         let was_building_mode = self.ui.app.hud_state.building_placement.is_some();
@@ -2058,6 +2198,7 @@ impl SowApp {
         self.ui.app.hud_state.building_placement = Some(crate::ui::hud::state::BuildingPlacement {
             kind,
             tile_idx: tile,
+            city_id,
             pending: false,
         });
         self.sfx

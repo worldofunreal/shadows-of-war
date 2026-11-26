@@ -21,6 +21,33 @@ pub fn is_valid_account_id(value: &str) -> bool {
             }))
 }
 
+/// Match IDs accepted by public detail APIs: non-empty ASCII alphanumeric, '-' or '_', up to 64 bytes.
+pub fn is_valid_match_id(value: &str) -> bool {
+    let value = value.trim();
+    !value.is_empty()
+        && value.len() <= 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+}
+
+/// Normalizes a tier filter string against the 10-league civilization ladder.
+pub fn canonical_tier_key(value: &str) -> Option<&'static str> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "nomad" | "unranked" => Some("Nomad"),
+        "chieftain" | "bronze" => Some("Chieftain"),
+        "commander" => Some("Commander"),
+        "governor" => Some("Governor"),
+        "king" | "gold" => Some("King"),
+        "emperor" => Some("Emperor"),
+        "sovereign" | "platinum" => Some("Sovereign"),
+        "overlord" | "diamond" => Some("Overlord"),
+        "immortal" | "master" => Some("Immortal"),
+        "deity" | "grandmaster" => Some("Deity"),
+        _ => None,
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum RewardSettlementStatus {
@@ -411,6 +438,12 @@ pub struct MatchRecord {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct RankedResultPresentation {
+    #[serde(default)]
+    pub queue: String,
+    #[serde(default)]
+    pub placement: u16,
+    #[serde(default)]
+    pub total_contenders: u16,
     pub score_before: u16,
     pub score_after: u16,
     pub rating_delta: i16,
@@ -466,11 +499,21 @@ pub fn ranked_ladder() -> RankedLadder {
     let mut steps = Vec::<RankedStep>::new();
     for score in (0..=9000).step_by(usize::from(RANKED_LEAGUE_STEP)) {
         let (tier, division) = tier_for_score(score);
-        if steps.last().is_none_or(|last| last.tier != tier || last.division != division) {
-            steps.push(RankedStep { score, tier: tier.to_string(), division });
+        if steps
+            .last()
+            .is_none_or(|last| last.tier != tier || last.division != division)
+        {
+            steps.push(RankedStep {
+                score,
+                tier: tier.to_string(),
+                division,
+            });
         }
     }
-    RankedLadder { steps, max_score: RANKED_MAX_SCORE }
+    RankedLadder {
+        steps,
+        max_score: RANKED_MAX_SCORE,
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -667,6 +710,10 @@ pub struct VerifiedMatchResult {
 pub struct VerifiedMatchParticipant {
     pub player_id: u16,
     pub account_id: String,
+    /// Server-verified final place for Ranked FFA; zero for other queues or
+    /// provisional personal closures.
+    #[serde(default)]
+    pub placement: u16,
     pub leader: Option<String>,
     pub team: Option<String>,
     pub won: bool,
@@ -722,6 +769,16 @@ pub struct PublicProfileIndex {
     #[serde(default)]
     pub verified_wins: u32,
     pub updated_at: u64,
+    #[serde(default)]
+    pub level: u32,
+    #[serde(default)]
+    pub matches_played: u32,
+    #[serde(default)]
+    pub preferred_leader: Option<String>,
+    #[serde(default)]
+    pub ranked_1v1_score: u16,
+    #[serde(default)]
+    pub ranked_ffa_score: u16,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -864,7 +921,7 @@ pub struct PublicRatingView {
     pub peak_score: u16,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct PublicLeaderboardEntry {
     pub rank: u32,
     pub account_id: String,
@@ -878,9 +935,21 @@ pub struct PublicLeaderboardEntry {
     pub division: Option<String>,
     pub games_played: u32,
     pub wins: u32,
+    #[serde(default)]
+    pub peak_score: u16,
+    #[serde(default)]
+    pub win_rate: f32,
+    #[serde(default)]
+    pub win_streak: u32,
+    #[serde(default)]
+    pub level: u32,
+    #[serde(default)]
+    pub preferred_leader: Option<String>,
+    #[serde(default)]
+    pub updated_at: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct PublicVictoryLeaderboardEntry {
     pub rank: u32,
     pub account_id: String,
@@ -888,6 +957,10 @@ pub struct PublicVictoryLeaderboardEntry {
     pub level: u32,
     pub matches_played: u32,
     pub wins: u32,
+    #[serde(default)]
+    pub preferred_leader: Option<String>,
+    #[serde(default)]
+    pub win_rate: f32,
 }
 
 pub fn public_handle(display_name: &str, account_id: &str) -> String {
@@ -913,7 +986,13 @@ pub fn kda(kills: u32, deaths: u32, assists: u32) -> f32 {
 
 /// Update one ranked 1v1 rating using the original Glicko formula.
 /// The caller supplies both ratings as they stood before the match.
-pub fn ranked_glicko(rating: f64, deviation: f64, opponent: f64, opponent_deviation: f64, score: f64) -> (f64, f64) {
+pub fn ranked_glicko(
+    rating: f64,
+    deviation: f64,
+    opponent: f64,
+    opponent_deviation: f64,
+    score: f64,
+) -> (f64, f64) {
     let q = 10_f64.ln() / 400.0;
     let deviation = deviation.clamp(50.0, 350.0);
     let opponent_deviation = opponent_deviation.clamp(50.0, 350.0);
@@ -960,7 +1039,8 @@ fn ranked_point_base(score: u16, won: bool) -> i16 {
             let progress = f64::from(score.saturating_sub(start)) / f64::from(end - start);
             let start_value = if won { win } else { loss };
             let end_value = if won { next_win } else { next_loss };
-            return (f64::from(start_value) + f64::from(end_value - start_value) * progress).round() as i16;
+            return (f64::from(start_value) + f64::from(end_value - start_value) * progress).round()
+                as i16;
         }
     }
     if won { 70 } else { 95 }
@@ -975,7 +1055,10 @@ pub fn ranked_points_breakdown(
         return RankedPointsBreakdown::default();
     }
     if result == 0.0 && rating.score < RANKED_COMPETITIVE_FLOOR {
-        return RankedPointsBreakdown { protected_loss: true, ..Default::default() };
+        return RankedPointsBreakdown {
+            protected_loss: true,
+            ..Default::default()
+        };
     }
 
     let won = result == 1.0;
@@ -983,12 +1066,22 @@ pub fn ranked_points_breakdown(
     let opponent_adjustment = (40.0 * (0.5 - expected)).round() as i16;
     let expected_mu = 1000.0 + f64::from(rating.score) * 0.2;
     let league_adjustment = if rating.score >= RANKED_COMPETITIVE_FLOOR {
-        ((rating.mu - expected_mu) / 50.0).round().clamp(-15.0, 15.0) as i16
+        ((rating.mu - expected_mu) / 50.0)
+            .round()
+            .clamp(-15.0, 15.0) as i16
     } else {
         0
     };
-    let base = if won { ranked_point_base(rating.score, true) } else { -ranked_point_base(rating.score, false) };
-    let streak = if won { (rating.win_streak.saturating_add(1).min(3) as i16) * 10 } else { 0 };
+    let base = if won {
+        ranked_point_base(rating.score, true)
+    } else {
+        -ranked_point_base(rating.score, false)
+    };
+    let streak = if won {
+        (rating.win_streak.saturating_add(1).min(3) as i16) * 10
+    } else {
+        0
+    };
     let raw = base + opponent_adjustment + league_adjustment + streak;
     let mut breakdown = RankedPointsBreakdown {
         base,
@@ -1000,12 +1093,16 @@ pub fn ranked_points_breakdown(
     if won {
         let bounded = raw.clamp(35, 160);
         breakdown.limit = bounded - raw;
-        let actual = (i32::from(rating.score) + i32::from(bounded)).min(i32::from(RANKED_MAX_SCORE)) - i32::from(rating.score);
+        let actual = (i32::from(rating.score) + i32::from(bounded))
+            .min(i32::from(RANKED_MAX_SCORE))
+            - i32::from(rating.score);
         breakdown.limit += actual as i16 - bounded;
     } else {
         let bounded = raw.clamp(-140, -10);
         breakdown.limit = bounded - raw;
-        let actual = (i32::from(rating.score) + i32::from(bounded)).max(i32::from(RANKED_COMPETITIVE_FLOOR)) - i32::from(rating.score);
+        let actual = (i32::from(rating.score) + i32::from(bounded))
+            .max(i32::from(RANKED_COMPETITIVE_FLOOR))
+            - i32::from(rating.score);
         breakdown.protection = actual as i16 - bounded;
     }
     breakdown
@@ -1064,13 +1161,44 @@ pub fn initial_ranked_rating(account_id: String, initial_mmr: f64, now: u64) -> 
     }
 }
 
+/// Create the initial rating record for the Ranked FFA placement ladder.
+pub fn initial_ranked_ffa_rating(account_id: String, initial_mmr: f64, now: u64) -> SeasonRating {
+    let mut rating = initial_ranked_rating(account_id, initial_mmr, now);
+    rating.queue = "RankedFFA".to_string();
+    rating
+}
+
+/// Convert a competition place and tied-place count into Ranked FFA points.
+/// Tied players share the mean of the points for the places they occupy.
+pub fn ranked_ffa_placement_delta(placement: u16, tie_count: usize, total: u16) -> i16 {
+    if placement == 0 || tie_count == 0 || total == 0 || placement > total {
+        return 0;
+    }
+    if total == 1 {
+        return 30;
+    }
+    let average_place = f64::from(placement) + (tie_count.saturating_sub(1) as f64 / 2.0);
+    (30.0 * (1.0 - 2.0 * (average_place - 1.0) / f64::from(total - 1)))
+        .round()
+        .clamp(-30.0, 30.0) as i16
+}
+
 /// Apply a verified result using the opponent's rating before this match.
-pub fn apply_ranked_result(rating: &mut SeasonRating, opponent: &SeasonRating, result: f64, now: u64) -> Result<(), &'static str> {
-    if rating.queue != "Ranked1v1" || opponent.queue != "Ranked1v1"
-        || rating.season_id != opponent.season_id || rating.account_id == opponent.account_id
+pub fn apply_ranked_result(
+    rating: &mut SeasonRating,
+    opponent: &SeasonRating,
+    result: f64,
+    now: u64,
+) -> Result<(), &'static str> {
+    if rating.queue != "Ranked1v1"
+        || opponent.queue != "Ranked1v1"
+        || rating.season_id != opponent.season_id
+        || rating.account_id == opponent.account_id
         || ![0.0, 0.5, 1.0].contains(&result)
-        || !rating.mu.is_finite() || !rating.sigma.is_finite()
-        || !opponent.mu.is_finite() || !opponent.sigma.is_finite()
+        || !rating.mu.is_finite()
+        || !rating.sigma.is_finite()
+        || !opponent.mu.is_finite()
+        || !opponent.sigma.is_finite()
     {
         return Err("invalid ranked result");
     }
@@ -1121,11 +1249,25 @@ mod tests {
     use std::collections::BTreeSet;
 
     #[test]
+    fn ranked_ffa_points_follow_place_and_average_ties() {
+        assert_eq!(super::ranked_ffa_placement_delta(1, 1, 16), 30);
+        assert_eq!(super::ranked_ffa_placement_delta(16, 1, 16), -30);
+        assert_eq!(super::ranked_ffa_placement_delta(2, 2, 16), 24);
+        assert_eq!(super::ranked_ffa_placement_delta(4, 1, 24), 22);
+        assert_eq!(super::ranked_ffa_placement_delta(0, 1, 16), 0);
+    }
+
+    #[test]
     fn presentation_ladder_matches_every_score_and_boundary() {
         let ladder = super::ranked_ladder();
         assert_eq!(ladder.steps.len(), 10);
         for score in 0..=ladder.max_score {
-            let shown = ladder.steps.iter().rev().find(|step| step.score <= score).unwrap();
+            let shown = ladder
+                .steps
+                .iter()
+                .rev()
+                .find(|step| step.score <= score)
+                .unwrap();
             let (tier, division) = super::tier_for_score(score);
             assert_eq!((&*shown.tier, &shown.division), (tier, &division));
             assert_eq!(division, None);
@@ -1159,11 +1301,8 @@ mod tests {
     }
 
     fn ranked_rating(score: u16, mu: f64, games: u32, streak: u32) -> super::SeasonRating {
-        let mut rating = super::initial_ranked_rating(
-            format!("rating-{score}-{mu}-{games}-{streak}"),
-            mu,
-            1,
-        );
+        let mut rating =
+            super::initial_ranked_rating(format!("rating-{score}-{mu}-{games}-{streak}"), mu, 1);
         rating.score = score;
         let (tier, division) = super::tier_for_score(score);
         rating.tier = tier.into();
@@ -1182,10 +1321,29 @@ mod tests {
         let weaker = ranked_rating(1500, 1250.0, 5, 0);
         let favored = super::ranked_points_breakdown(&player, &stronger, 1.0);
         let underdog = super::ranked_points_breakdown(&player, &weaker, 1.0);
-        assert_eq!((favored.base, favored.opponent, favored.streak, favored.total()), (110, 8, 20, 138));
-        assert_eq!((underdog.base, underdog.opponent, underdog.streak, underdog.total()), (110, -8, 20, 122));
+        assert_eq!(
+            (
+                favored.base,
+                favored.opponent,
+                favored.streak,
+                favored.total()
+            ),
+            (110, 8, 20, 138)
+        );
+        assert_eq!(
+            (
+                underdog.base,
+                underdog.opponent,
+                underdog.streak,
+                underdog.total()
+            ),
+            (110, -8, 20, 122)
+        );
         let veteran_streak = ranked_rating(2000, 1400.0, 5, 8);
-        assert_eq!(super::ranked_points_breakdown(&veteran_streak, &stronger, 1.0).streak, 30);
+        assert_eq!(
+            super::ranked_points_breakdown(&veteran_streak, &stronger, 1.0).streak,
+            30
+        );
     }
 
     #[test]
@@ -1215,8 +1373,19 @@ mod tests {
         let near_floor = ranked_rating(5015, 2003.0, 45, 0);
         let floor_result = super::ranked_points_breakdown(&near_floor, &near_floor, 0.0);
         assert_eq!(floor_result.total(), -15);
-        assert_eq!(i32::from(near_floor.score) + i32::from(floor_result.total()), 5000);
-        assert_eq!(floor_result.total(), floor_result.base + floor_result.opponent + floor_result.league + floor_result.streak + floor_result.protection + floor_result.limit);
+        assert_eq!(
+            i32::from(near_floor.score) + i32::from(floor_result.total()),
+            5000
+        );
+        assert_eq!(
+            floor_result.total(),
+            floor_result.base
+                + floor_result.opponent
+                + floor_result.league
+                + floor_result.streak
+                + floor_result.protection
+                + floor_result.limit
+        );
     }
 
     #[test]

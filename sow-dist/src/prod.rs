@@ -65,7 +65,10 @@ fn audit_site_server_configs(paths: &Paths) -> Result<()> {
 
     let prod_path = site_server_config_path(&paths.root, site::Site::Production);
     let ptr_path = site_server_config_path(&paths.root, site::Site::Ptr);
-    if let (Ok(prod_text), Ok(ptr_text)) = (fs::read_to_string(&prod_path), fs::read_to_string(&ptr_path)) {
+    if let (Ok(prod_text), Ok(ptr_text)) = (
+        fs::read_to_string(&prod_path),
+        fs::read_to_string(&ptr_path),
+    ) {
         let prod_val: Result<serde_json::Value, _> = serde_json::from_str(&prod_text);
         let ptr_val: Result<serde_json::Value, _> = serde_json::from_str(&ptr_text);
         if let (Ok(prod_val), Ok(ptr_val)) = (prod_val, ptr_val)
@@ -119,7 +122,10 @@ pub(crate) fn edit_server_config(root: &Path) -> Result<()> {
                 }
                 eprint!("Press Enter to fix it, or Ctrl-C to cancel: ");
                 if std::io::stdin().read_line(&mut String::new())? == 0 {
-                    bail!("cancelled; {} has the error and nothing was installed", local.display());
+                    bail!(
+                        "cancelled; {} has the error and nothing was installed",
+                        local.display()
+                    );
                 }
             }
         }
@@ -221,21 +227,26 @@ impl<'a> RelayAdmissionPause<'a> {
                 } else {
                     0
                 };
-                let generation_lobbies = if legacy_server {
-                    legacy_generation_lobbies(config)?
-                } else {
-                    0
-                };
+                let generation_lobbies = legacy_generation_lobbies(config)?;
                 let pending = if active == 0 && legacy_sessions == 0 && generation_lobbies == 0 {
-                    match verify_no_pending_reward_calculations(config) {
+                    let settled = if legacy_server {
+                        verify_no_pending_reward_calculations(config)
+                    } else {
+                        verify_generation_compatible_match_work(config)
+                    };
+                    match settled {
                         Ok(()) => break,
                         Err(error) => error,
                     }
                 } else {
-                    anyhow::anyhow!("{active} active/closing relay lobbies, {generation_lobbies} release lobbies and {legacy_sessions} legacy server connections remain")
+                    anyhow::anyhow!(
+                        "{active} active/closing relay lobbies, {generation_lobbies} release lobbies and {legacy_sessions} legacy server connections remain"
+                    )
                 };
                 if std::time::Instant::now() >= deadline {
-                    return Err(pending.context("timed out waiting for the legacy server and its matches to empty"));
+                    return Err(pending.context(
+                        "timed out waiting for the legacy server and its matches to empty",
+                    ));
                 }
                 println!("  waiting for production drain: {pending:#}");
                 std::thread::sleep(std::time::Duration::from_secs(10));
@@ -304,7 +315,9 @@ printf '%s\n' "$port""#,
         host = shell_quote(host),
     );
     let port = output("ssh", &[&config.control_host, &command])?;
-    port.trim().parse().context("legacy websocket port was invalid")
+    port.trim()
+        .parse()
+        .context("legacy websocket port was invalid")
 }
 
 fn set_legacy_ws_route(config: &Config, port: u16) -> Result<()> {
@@ -335,11 +348,11 @@ fn legacy_server_connections(config: &Config) -> Result<usize> {
     let command = format!(
         "sudo sockstat -4 -c -p 25564 | awk -v endpoint={endpoint} '$6 == endpoint {{ n++ }} END {{ print n + 0 }}'"
     );
-    let count = output(
-        "ssh",
-        &[&config.control_host, &command],
-    )?;
-    count.trim().parse().context("legacy server connection count was invalid")
+    let count = output("ssh", &[&config.control_host, &command])?;
+    count
+        .trim()
+        .parse()
+        .context("legacy server connection count was invalid")
 }
 
 fn legacy_generation_lobbies(config: &Config) -> Result<usize> {
@@ -358,8 +371,10 @@ while read -r id; do
     port=$(sudo awk -F '"' -v id="$id" '$2 == id { gsub(/[^0-9]/, "", $3); print $3; exit }' "$http_map")
     [ -n "$port" ] || exit 1
     status=$(curl -fsS --max-time 5 "http://__SITE_LOOPBACK__:$port/internal/generation-status")
-    count=$(printf '%s' "$status" | sed -n 's/.*"occupied_lobbies"[[:space:]]*:[[:space:]]*\\([0-9][0-9]*\\).*/\\1/p')
-    case "$count" in ''|*[!0-9]*) exit 1 ;; esac
+    count=$(printf '%s' "$status" | sed -n 's/.*"occupied_lobbies"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p')
+    case "$count" in
+        ''|*[!0-9]*) echo "generation status did not report occupied_lobbies for $id: $status" >&2; exit 1 ;;
+    esac
     total=$((total + count))
 done <<EOF
 $(sudo awk -F '"' '{ if ($2 != "") print $2 }' "$ws_map")
@@ -391,6 +406,129 @@ printf 'header = "Authorization: Bearer %s"\n' "$secret" | curl --noproxy '*' -f
         );
     }
     verify_settled_verifier_checkpoints(config)
+}
+
+fn verify_generation_compatible_match_work(config: &Config) -> Result<()> {
+    let script = r#"sudo python3 - <<'VERIFY_VERSIONED_MATCH_WORK'
+import json, os, re, subprocess, urllib.error, urllib.request
+
+server_jail = "__SITE_SERVER_JAIL__"
+database_jail = "__SITE_DATABASE_JAIL__"
+loopback = "__SITE_LOOPBACK__"
+release_root = "__SITE_RELEASE_ROOT__"
+http_map = "/usr/local/etc/nginx/__SITE_MAP_PREFIX__sow-server-http.map"
+active_path = release_root + "/active-generation"
+base = "http://" + loopback + ":25585"
+
+def jail(name, *args):
+    return subprocess.check_output(["jexec", name, *args], text=True)
+
+secret = jail(database_jail, "/bin/sh", "-c",
+    '. /usr/local/etc/sow/sow.env; printf "%s" "$SOW_DB_SECRET"')
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+def request(url, method="GET"):
+    req = urllib.request.Request(url, method=method,
+        headers={"Authorization": "Bearer " + secret})
+    with opener.open(req, timeout=20) as response:
+        return json.load(response)
+
+stats = request(base + "/internal/stats")
+rewards = stats.get("rewards", {})
+calculations = rewards.get("match_ids")
+payments = rewards.get("closing_match_ids")
+if not isinstance(calculations, list) or not isinstance(payments, list):
+    raise RuntimeError("database did not identify pending reward match IDs")
+if rewards.get("pending_calculations") != len(calculations):
+    raise RuntimeError("pending calculation count did not match its match IDs")
+if rewards.get("pending_payments") != len(payments):
+    raise RuntimeError("pending payment count did not match its match IDs")
+
+match_ids = set(calculations + payments)
+for match_id in match_ids:
+    if not isinstance(match_id, str) or not re.fullmatch(r"[0-9]{1,20}", match_id):
+        raise RuntimeError("database returned an invalid pending match ID")
+
+pending_owners = {}
+for match_id in sorted(match_ids):
+    record = request(base + "/internal/match-start/" + match_id)
+    if record.get("match_id") != match_id:
+        raise RuntimeError("match registration did not match pending work " + match_id)
+    status = record.get("replay_status")
+    if status in ("verified", "rejected"):
+        continue
+    if status != "pending":
+        raise RuntimeError("match has an unknown replay status " + match_id)
+    metadata = record.get("metadata", {})
+    release_id = metadata.get("server_release_id")
+    rules_id = metadata.get("simulation_rules_id")
+    verifier_url = metadata.get("verifier_url")
+    if not isinstance(release_id, str) or not re.fullmatch(r"[A-Za-z0-9._-]+", release_id):
+        raise RuntimeError("pending match has no trusted server release owner " + match_id)
+    if not isinstance(rules_id, str) or not re.fullmatch(r"[0-9a-f]{64}", rules_id):
+        raise RuntimeError("pending match has no simulation rules identity " + match_id)
+    if not isinstance(verifier_url, str):
+        raise RuntimeError("pending match has no verifier URL " + match_id)
+    pending_owners.setdefault(release_id, []).append((match_id, verifier_url))
+
+if not pending_owners:
+    print("settled")
+    raise SystemExit(0)
+
+active = open(active_path, encoding="utf-8").read().strip()
+ports = {}
+with open(http_map, encoding="utf-8") as source:
+    for line in source:
+        match = re.fullmatch(r'\s*"([^"\\]+)"\s+([0-9]+);\s*', line)
+        if match:
+            ports[match.group(1)] = int(match.group(2))
+
+for release_id, matches in pending_owners.items():
+    port = ports.get(release_id)
+    if port is None:
+        raise RuntimeError("pending match verifier release is not retained in the HTTP map: " + release_id)
+    binary = os.path.join(release_root, "releases", release_id, "bin", "sow-server")
+    if not os.path.isfile(binary):
+        raise RuntimeError("pending match verifier binary is not retained: " + release_id)
+    env_file = "/usr/local/etc/sow/generations/" + release_id + ".env"
+    env_lines = jail(server_jail, "/bin/sh", "-c",
+        'test -f "$1" && awk -F= \'$1 == "SOW_SERVER_RELEASE_ID" || $1 == "SOW_SERVER_HTTP_URL" { print }\' "$1"',
+        "sh", env_file).splitlines()
+    environment = dict(line.split("=", 1) for line in env_lines if "=" in line)
+    expected_url = "http://" + loopback + ":" + str(port)
+    if environment.get("SOW_SERVER_RELEASE_ID") != release_id:
+        raise RuntimeError("retained verifier environment has the wrong release identity: " + release_id)
+    if environment.get("SOW_SERVER_HTTP_URL") != expected_url:
+        raise RuntimeError("retained verifier environment has the wrong HTTP owner: " + release_id)
+    for match_id, verifier_url in matches:
+        if verifier_url.rstrip("/") != expected_url:
+            raise RuntimeError("match verifier URL does not resolve to its recorded release: " + match_id)
+    subprocess.run(["jexec", server_jail, "/usr/local/etc/rc.d/sow_server",
+        "status_generation", release_id], check=True, stdout=subprocess.DEVNULL)
+    status = request(expected_url + "/internal/generation-status")
+    if status.get("occupied_lobbies") != 0:
+        raise RuntimeError("retained verifier still owns an active lobby: " + release_id)
+    if release_id != active and status.get("accepting_new_lobbies") is True:
+        request(expected_url + "/internal/generation-drain", method="POST")
+        status = request(expected_url + "/internal/generation-status")
+    if release_id != active and status.get("accepting_new_lobbies") is not False:
+        raise RuntimeError("retained verifier did not stop accepting new lobbies: " + release_id)
+    work = request(base + "/internal/release-work/" + release_id)
+    if not isinstance(work.get("outstanding_matches"), int) or work["outstanding_matches"] < len(matches):
+        raise RuntimeError("database does not confirm durable work for retained verifier: " + release_id)
+
+print("verified retained verifiers for", sum(map(len, pending_owners.values())),
+    "pending match calculations across", len(pending_owners), "server generations")
+VERIFY_VERSIONED_MATCH_WORK
+"#;
+    let result = output("ssh", &[&config.control_host, script])?;
+    if result.trim() == "settled" {
+        verify_settled_verifier_checkpoints(config)
+    } else if result.starts_with("verified retained verifiers for ") {
+        Ok(())
+    } else {
+        bail!("versioned match work verification returned an unexpected result")
+    }
 }
 
 fn verify_settled_verifier_checkpoints(config: &Config) -> Result<()> {
@@ -426,8 +564,36 @@ VERIFY_SAVED_ENGINES
         .context("backend update postponed: a saved match still requires its running verifier")
 }
 
-pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>, client_update: bool) -> Result<()> {
-    if let Some(only) = only && bump {
+pub(super) fn execute(
+    paths: &Paths,
+    bump: bool,
+    only: Option<BackendOnly>,
+    client_update: bool,
+) -> Result<()> {
+    // A version bump must not stick when the pipeline fails: restore the
+    // pre-deploy .version so a retry starts from the version that is
+    // actually deployed and published.
+    let original = version(paths, false).ok();
+    let result = execute_inner(paths, bump, only, client_update);
+    if result.is_err()
+        && let Some(original) = original
+        && let Ok(current) = fs::read_to_string(paths.root.join(".version"))
+        && current.trim() != original.trim()
+    {
+        fs::write(paths.root.join(".version"), format!("{original}\n"))?;
+    }
+    result
+}
+
+fn execute_inner(
+    paths: &Paths,
+    bump: bool,
+    only: Option<BackendOnly>,
+    client_update: bool,
+) -> Result<()> {
+    if let Some(only) = only
+        && bump
+    {
         bail!("--{}-only cannot bump the public version", only.name());
     }
     let config = Config::load();
@@ -470,8 +636,12 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>, clie
         let (web, backend) = std::thread::scope(|scope| {
             let web = scope.spawn(|| build_web(paths, &version));
             let backend = scope.spawn(|| build_freebsd(paths, &config));
-            let web = web.join().map_err(|_| anyhow::anyhow!("web build panicked"))??;
-            let backend = backend.join().map_err(|_| anyhow::anyhow!("FreeBSD build panicked"))??;
+            let web = web
+                .join()
+                .map_err(|_| anyhow::anyhow!("web build panicked"))??;
+            let backend = backend
+                .join()
+                .map_err(|_| anyhow::anyhow!("FreeBSD build panicked"))??;
             Ok::<_, anyhow::Error>((web, backend))
         })?;
         println!("==> 3/8 Package immutable release");
@@ -497,12 +667,21 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>, clie
         plan.database = true;
         plan.server = true;
     }
-    if stripe_env_leftover(&config)? { plan.database = true; }
-    if let Some(only) = only && (plan.web || plan.maps || plan.database || plan.ops
-        || (plan.relay && only == BackendOnly::Server)
-        || (plan.server && only == BackendOnly::Relay))
+    if stripe_env_leftover(&config)? {
+        plan.database = true;
+    }
+    if let Some(only) = only
+        && (plan.web
+            || plan.maps
+            || plan.database
+            || plan.ops
+            || (plan.relay && only == BackendOnly::Server)
+            || (plan.server && only == BackendOnly::Relay))
     {
-        bail!("{}-only deployment refused: another component needs activation ({plan:?})", only.name());
+        bail!(
+            "{}-only deployment refused: another component needs activation ({plan:?})",
+            only.name()
+        );
     }
     println!("  plan: {plan:?}");
     if plan.client {
@@ -525,7 +704,10 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>, clie
         join_smoke(paths, &config)?;
         retain_releases(&config)?;
         retain_local_builds(paths)?;
-        println!("✅ {} already serves the requested content", site::current().label());
+        println!(
+            "✅ {} already serves the requested content",
+            site::current().label()
+        );
         return Ok(());
     }
 
@@ -536,10 +718,10 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>, clie
     // legacy process once because it has no release identity or lobby-status endpoint.
     // The first generation-aware activation must drain once: the currently
     // installed client/server cannot route a reconnect back to an owner.
-    let generation_routing_ready = !(plan.server || plan.maps || plan.ops)
-        || has_active_server_generation(&config)?;
-    let require_empty = plan.database || plan.ops
-        || ((plan.server || plan.maps) && !generation_routing_ready);
+    let generation_routing_ready =
+        !(plan.server || plan.maps || plan.ops) || has_active_server_generation(&config)?;
+    let require_empty =
+        plan.database || plan.ops || ((plan.server || plan.maps) && !generation_routing_ready);
     let activate = || {
         println!("==> 6/8 Activate changed components only");
         let backup = relay::Backup::capture(&config)?;
@@ -571,7 +753,9 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>, clie
             }
             Ok(())
         })();
-        if result.is_err() && let Some(pause) = admission.as_mut() {
+        if result.is_err()
+            && let Some(pause) = admission.as_mut()
+        {
             pause.paused = false;
         }
         Ok::<_, anyhow::Error>((backup, opened_local, result))
@@ -590,9 +774,14 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>, clie
                 local.drain(&config, true)?;
                 let deadline = std::time::Instant::now() + std::time::Duration::from_secs(240);
                 loop {
-                    if local.lobbies(&config)?.is_empty()
-                        && verify_no_pending_reward_calculations(&config).is_ok()
-                    {
+                    let active_lobbies = local.lobbies(&config)?;
+                    let generation_lobbies = legacy_generation_lobbies(&config)?;
+                    let work_safe = if generation_routing_ready {
+                        verify_generation_compatible_match_work(&config).is_ok()
+                    } else {
+                        verify_no_pending_reward_calculations(&config).is_ok()
+                    };
+                    if active_lobbies.is_empty() && generation_lobbies == 0 && work_safe {
                         break;
                     }
                     if std::time::Instant::now() >= deadline {
@@ -608,13 +797,20 @@ pub(super) fn execute(paths: &Paths, bump: bool, only: Option<BackendOnly>, clie
         })();
         return match rollback {
             Ok(()) => Err(error.context("previous production release restored")),
-            Err(rollback) => Err(error.context(format!("could not complete rollback: {rollback:#}"))),
+            Err(rollback) => {
+                Err(error.context(format!("could not complete rollback: {rollback:#}")))
+            }
         };
     }
     backup.remove(&config)?;
     retain_releases(&config)?;
     retain_local_builds(paths)?;
-    println!("✅ {} {} ready as {}", site::current().label(), release.version, release.id);
+    println!(
+        "✅ {} {} ready as {}",
+        site::current().label(),
+        release.version,
+        release.id
+    );
     Ok(())
 }
 
@@ -622,7 +818,13 @@ fn has_active_server_generation(config: &Config) -> Result<bool> {
     let marker = format!("{}/active-generation", site::current().release_root());
     let result = output(
         "ssh",
-        &[&config.control_host, &format!("sudo test -s {} && echo yes || echo no", shell_quote(&marker))],
+        &[
+            &config.control_host,
+            &format!(
+                "sudo test -s {} && echo yes || echo no",
+                shell_quote(&marker)
+            ),
+        ],
     )?;
     Ok(result.trim() == "yes")
 }
@@ -644,7 +846,11 @@ fn verify_ionos_runtime(config: &Config, release: &Release, plan: &ComponentPlan
 /// A real client joins a private lobby on the public route with this release's identity.
 fn join_smoke(paths: &Paths, config: &Config) -> Result<()> {
     let mut websocket = url::Url::parse(&config.public_origin)?;
-    let scheme = if websocket.scheme() == "https" { "wss" } else { "ws" };
+    let scheme = if websocket.scheme() == "https" {
+        "wss"
+    } else {
+        "ws"
+    };
     websocket
         .set_scheme(scheme)
         .map_err(|_| anyhow::anyhow!("invalid public WebSocket scheme"))?;
@@ -657,11 +863,20 @@ fn join_smoke(paths: &Paths, config: &Config) -> Result<()> {
     run(
         "cargo",
         &[
-            "run", "--locked", "-p", "sow-tools", "--bin", "test-relay", "--",
+            "run",
+            "--locked",
+            "-p",
+            "sow-tools",
+            "--bin",
+            "test-relay",
+            "--",
             "--smoke",
-            "--url", websocket.as_str(),
-            "--database-url", &database,
-            "--audit-accounts-file", accounts.to_str().context("invalid audit accounts path")?,
+            "--url",
+            websocket.as_str(),
+            "--database-url",
+            &database,
+            "--audit-accounts-file",
+            accounts.to_str().context("invalid audit accounts path")?,
         ],
         Some(&paths.root),
     )
@@ -717,8 +932,12 @@ fn render_site_files(dir: &Path) -> Result<()> {
         let path = entry?.path();
         if path.is_dir() {
             render_site_files(&path)?;
-        } else if fs::read(&path)?.windows(7).any(|window| window == b"__SITE_") {
-            let text = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
+        } else if fs::read(&path)?
+            .windows(7)
+            .any(|window| window == b"__SITE_")
+        {
+            let text =
+                fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
             fs::write(&path, site::render(&text)?)?;
         }
     }
@@ -1077,9 +1296,13 @@ fn publish_android(paths: &Paths, version_code: u32) -> Result<()> {
 
 fn preflight(paths: &Paths, config: &Config, reuse_web: bool) -> Result<()> {
     let commands: &[&str] = if reuse_web {
-        &["bun", "cargo", "curl", "node", "rsync", "rustc", "scp", "ssh"]
+        &[
+            "bun", "cargo", "curl", "node", "rsync", "rustc", "scp", "ssh",
+        ]
     } else {
-        &["bun", "cargo", "curl", "magick", "node", "rsync", "rustc", "scp", "ssh", "wasm-opt"]
+        &[
+            "bun", "cargo", "curl", "magick", "node", "rsync", "rustc", "scp", "ssh", "wasm-opt",
+        ]
     };
     for command in commands {
         if !Command::new("/bin/sh")
@@ -1320,7 +1543,9 @@ fn build_web(paths: &Paths, version: &str) -> Result<PathBuf> {
     let state = site::current().state_prefix();
     let candidate_root = paths.root.join(format!("dist/.sow-state/{state}-web"));
     let web = candidate_root.join("web");
-    let cache = paths.root.join(format!("dist/.sow-state/{state}-web-package"));
+    let cache = paths
+        .root
+        .join(format!("dist/.sow-state/{state}-web-package"));
     let cached = fs::read_to_string(&cache).is_ok_and(|value| value.trim() == fingerprint)
         && web.join("play/index.html").is_file();
     if cached {
@@ -1509,7 +1734,10 @@ fn input_fingerprint(tag: &str, value: &str, inputs: &[&Path]) -> Result<String>
 fn has_active_release(config: &Config) -> Result<bool> {
     let state = output(
         "ssh",
-        &[&config.control_host, "if [ -L __SITE_RELEASE_ROOT__/current ]; then echo active; else echo none; fi"],
+        &[
+            &config.control_host,
+            "if [ -L __SITE_RELEASE_ROOT__/current ]; then echo active; else echo none; fi",
+        ],
     )?;
     Ok(state.trim() == "active")
 }
@@ -1517,7 +1745,10 @@ fn has_active_release(config: &Config) -> Result<bool> {
 fn active_release_id(config: &Config) -> Result<String> {
     let current = output(
         "ssh",
-        &[&config.control_host, "readlink __SITE_RELEASE_ROOT__/current"],
+        &[
+            &config.control_host,
+            "readlink __SITE_RELEASE_ROOT__/current",
+        ],
     )?;
     let current = current
         .trim()
@@ -1551,11 +1782,7 @@ fn assemble_backend_only_release(
         fs::remove_dir_all(&work)?;
     }
     fs::create_dir_all(&work)?;
-    let source = format!(
-        "{}:{}/{current}/",
-        config.control_host,
-        remote_releases()
-    );
+    let source = format!("{}:{}/{current}/", config.control_host, remote_releases());
     let destination = format!("{}/", work.display());
     run(
         "rsync",
@@ -1589,7 +1816,9 @@ fn assemble_backend_only_release(
             for (component, binary) in [("server", "sow-server"), ("database", "sow-database")] {
                 let candidate = file_sha256(&binaries.join(binary))?;
                 if components.get(component) != Some(&candidate) {
-                    bail!("relay-only build changes {component}; publish compatible components together with ./sow p");
+                    bail!(
+                        "relay-only build changes {component}; publish compatible components together with ./sow p"
+                    );
                 }
             }
             let (hash, manifest) = package_relay(paths, binaries, &work)?;
@@ -1597,8 +1826,13 @@ fn assemble_backend_only_release(
             Some(manifest)
         }
     };
-    components.insert("client".into(), sow_core::protocol::gameplay_build_identity());
-    let component_names = ["web", "maps", "server", "database", "ops", "relay", "client"];
+    components.insert(
+        "client".into(),
+        sow_core::protocol::gameplay_build_identity(),
+    );
+    let component_names = [
+        "web", "maps", "server", "database", "ops", "relay", "client",
+    ];
     let component_text = component_names
         .iter()
         .map(|name| {
@@ -1635,13 +1869,21 @@ fn assemble_backend_only_release(
     }
     release_json["dirty"] = json!(!dirty_files.is_empty());
     release_json["dirty_files"] = json!(dirty_files);
-    release_json["components"] = json!(component_names
-        .iter()
-        .map(|name| json!({"name": name, "sha256": components[*name]}))
-        .collect::<Vec<_>>());
-    fs::write(&release_json_path, serde_json::to_vec_pretty(&release_json)?)?;
+    release_json["components"] = json!(
+        component_names
+            .iter()
+            .map(|name| json!({"name": name, "sha256": components[*name]}))
+            .collect::<Vec<_>>()
+    );
+    fs::write(
+        &release_json_path,
+        serde_json::to_vec_pretty(&release_json)?,
+    )?;
 
-    println!("  carrying forward all components except {} from {current}", only.name());
+    println!(
+        "  carrying forward all components except {} from {current}",
+        only.name()
+    );
     seal_release(paths, &work, version)
 }
 
@@ -1709,7 +1951,10 @@ fn assemble_release(paths: &Paths, web: &Path, binaries: &Path, version: &str) -
     }
     // conf.d was copied whole, including the production template. Install only this site's file.
     fs::remove_file(work.join("ops/conf.d/shadowsofwar.io.conf"))?;
-    fs::write(work.join("ops/conf.d").join(site::current().nginx_conf()), nginx_site)?;
+    fs::write(
+        work.join("ops/conf.d").join(site::current().nginx_conf()),
+        nginx_site,
+    )?;
     render_site_files(&work.join("ops"))?;
 
     require_file(&work.join("web/index.html"), "website index")?;
@@ -1782,18 +2027,26 @@ fn install_release_binary(binaries: &Path, work: &Path, name: &str) -> Result<()
     Ok(())
 }
 
-fn package_relay(paths: &Paths, binaries: &Path, work: &Path) -> Result<(String, serde_json::Value)> {
+fn package_relay(
+    paths: &Paths,
+    binaries: &Path,
+    work: &Path,
+) -> Result<(String, serde_json::Value)> {
     install_release_binary(binaries, work, "sow-relay")?;
     let relay_ops = work.join("relay-ops");
     if relay_ops.exists() {
         fs::remove_dir_all(&relay_ops)?;
     }
-    copy_dir(&paths.root.join("sow-dist/deploy/freebsd/relay"), &relay_ops)?;
+    copy_dir(
+        &paths.root.join("sow-dist/deploy/freebsd/relay"),
+        &relay_ops,
+    )?;
     let timeout = relay::settings(&relay_ops)?;
     let bin_sha = file_sha256(&work.join("bin/sow-relay"))?;
-    let component = format!("{:x}", Sha256::digest(
-        format!("{bin_sha}:{}", directory_sha256(&relay_ops)?).as_bytes(),
-    ));
+    let component = format!(
+        "{:x}",
+        Sha256::digest(format!("{bin_sha}:{}", directory_sha256(&relay_ops)?).as_bytes(),)
+    );
     let manifest = json!({
         "backend": "tokio",
         "sha256": component,
@@ -1872,15 +2125,33 @@ fn write_manifest(root: &Path) -> Result<PathBuf> {
 fn remote_plan(config: &Config, release: &Release) -> Result<ComponentPlan> {
     // A first activation has no active release to compare with, so every component is new.
     if !has_active_release(config)? {
-        return Ok(ComponentPlan { web: true, maps: true, server: true, database: true, ops: true, relay: true, client: false });
+        return Ok(ComponentPlan {
+            web: true,
+            maps: true,
+            server: true,
+            database: true,
+            ops: true,
+            relay: true,
+            client: false,
+        });
     }
-    let remote = output("ssh", &[&config.control_host, "cat __SITE_RELEASE_ROOT__/current/COMPONENTS"])?;
+    let remote = output(
+        "ssh",
+        &[
+            &config.control_host,
+            "cat __SITE_RELEASE_ROOT__/current/COMPONENTS",
+        ],
+    )?;
     let current = parse_components(&remote);
     let local = parse_components(&fs::read_to_string(release.dir.join("COMPONENTS"))?);
     let changed = |component| current.get(component) != local.get(component);
     Ok(ComponentPlan {
-        web: changed("web"), maps: changed("maps"), server: changed("server"),
-        database: changed("database"), ops: changed("ops"), relay: changed("relay"),
+        web: changed("web"),
+        maps: changed("maps"),
+        server: changed("server"),
+        database: changed("database"),
+        ops: changed("ops"),
+        relay: changed("relay"),
         client: changed("client"),
     })
 }
@@ -1952,9 +2223,16 @@ else echo drift; fi"#,
 
 fn auth_config_drift(config: &Config) -> Result<bool> {
     let expected = hex::encode(Sha256::digest(auth_env_contents()?.as_bytes()));
-    let remote = output("ssh", &[&config.control_host,
-        "sudo test -s __SITE_DATABASE_ROOT__/etc/resolv.conf && sudo test -s __SITE_DATABASE_ROOT__/etc/ssl/cert.pem && sudo sha256 -q __SITE_DATABASE_ROOT__/usr/local/etc/sow/auth.env 2>/dev/null || true"])?;
-    if remote.trim() != expected { return Ok(true); }
+    let remote = output(
+        "ssh",
+        &[
+            &config.control_host,
+            "sudo test -s __SITE_DATABASE_ROOT__/etc/resolv.conf && sudo test -s __SITE_DATABASE_ROOT__/etc/ssl/cert.pem && sudo sha256 -q __SITE_DATABASE_ROOT__/usr/local/etc/sow/auth.env 2>/dev/null || true",
+        ],
+    )?;
+    if remote.trim() != expected {
+        return Ok(true);
+    }
     Ok(false)
 }
 
@@ -2088,7 +2366,9 @@ fn activate_control_host(
         let path = format!("/tmp/sow-auth-env-{}", std::process::id());
         stage_secret(&config.control_host, &auth_env_contents()?, &path)?;
         Some(path)
-    } else { None };
+    } else {
+        None
+    };
     let relay_host = relay::name();
     let relay_workers = format!("-:{relay_host}:{}", relay::PORT);
     let relay_worker_count = "1";
@@ -2137,7 +2417,8 @@ fn activate_control_host(
             relay_mgmt_scheme = shell_quote(&relay_mgmt_scheme),
             relay_mgmt_resolve_ip = shell_quote(&relay_mgmt_resolve_ip),
             server_http_url = shell_quote(&site::current().server_http_url()),
-            crazygames_game_id = shell_quote(&env::var("SOW_CRAZYGAMES_GAME_ID").unwrap_or_default()),
+            crazygames_game_id =
+                shell_quote(&env::var("SOW_CRAZYGAMES_GAME_ID").unwrap_or_default()),
             play_games_app_id = shell_quote(&play_games_app_id),
             play_games_client_id = shell_quote(&play_games_client_id),
             play_games_match_event_id = shell_quote(&play_games_match_event_id),
@@ -2160,8 +2441,13 @@ fn activate_control_host(
     };
     let env_update = env_update_base;
     let auth_update = if let Some(path) = &auth_env_file {
-        format!("sudo install -o root -g wheel -m 0600 {} __SITE_DATABASE_ROOT__/usr/local/etc/sow/auth.env", shell_quote(path))
-    } else { ":".to_owned() };
+        format!(
+            "sudo install -o root -g wheel -m 0600 {} __SITE_DATABASE_ROOT__/usr/local/etc/sow/auth.env",
+            shell_quote(path)
+        )
+    } else {
+        ":".to_owned()
+    };
     let settlement_secret_update = if let Some(secret_file) = settlement_secret_file.as_deref() {
         format!(
             r#"for f in __SITE_HOST_ETC__/sow.env __SITE_SERVER_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/sow.env; do
@@ -2235,32 +2521,56 @@ fi"#
         ":".to_string()
     };
     let mut resolver_update = String::new();
-    for (root, restart) in [(site::current().server_root(), server_restart), (site::current().database_root(), db_restart)] {
+    for (root, restart) in [
+        (site::current().server_root(), server_restart),
+        (site::current().database_root(), db_restart),
+    ] {
         if restart {
-            resolver_update.push_str(&format!("sudo install -o root -g wheel -m 0644 /etc/resolv.conf {root}/etc/resolv.conf\n"));
+            resolver_update.push_str(&format!(
+                "sudo install -o root -g wheel -m 0644 /etc/resolv.conf {root}/etc/resolv.conf\n"
+            ));
             resolver_update.push_str(&format!("sudo install -d -m 0755 {root}/etc/ssl\n"));
-            resolver_update.push_str(&format!("sudo install -o root -g wheel -m 0644 /etc/ssl/cert.pem {root}/etc/ssl/cert.pem\n"));
+            resolver_update.push_str(&format!(
+                "sudo install -o root -g wheel -m 0644 /etc/ssl/cert.pem {root}/etc/ssl/cert.pem\n"
+            ));
         }
     }
-    if resolver_update.is_empty() { resolver_update.push(':'); }
-    let config_files = format!("__SITE_HOST_ETC__/sow.env __SITE_SERVER_ROOT__/usr/local/etc/sow/config.json __SITE_SERVER_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/auth.env __SITE_SERVER_ROOT__/etc/resolv.conf __SITE_SERVER_ROOT__/etc/ssl/cert.pem __SITE_DATABASE_ROOT__/etc/resolv.conf __SITE_DATABASE_ROOT__/etc/ssl/cert.pem __SITE_SERVER_ROOT__/usr/local/etc/rc.d/sow_server __SITE_DATABASE_ROOT__/usr/local/etc/rc.d/sow_database /usr/local/etc/nginx/{}sow-server-active-ws.map /usr/local/etc/nginx/{}sow-server-active-http.map {}/active-generation /usr/local/etc/periodic/hourly/{} /etc/cron.d/{}", site::current().map_prefix(), site::current().map_prefix(), site::current().release_root(), site::current().periodic_generations_script(), site::current().cron_generations_file());
+    if resolver_update.is_empty() {
+        resolver_update.push(':');
+    }
+    let config_files = format!(
+        "__SITE_HOST_ETC__/sow.env __SITE_SERVER_ROOT__/usr/local/etc/sow/config.json __SITE_SERVER_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/sow.env __SITE_DATABASE_ROOT__/usr/local/etc/sow/auth.env __SITE_SERVER_ROOT__/etc/resolv.conf __SITE_SERVER_ROOT__/etc/ssl/cert.pem __SITE_DATABASE_ROOT__/etc/resolv.conf __SITE_DATABASE_ROOT__/etc/ssl/cert.pem __SITE_SERVER_ROOT__/usr/local/etc/rc.d/sow_server __SITE_DATABASE_ROOT__/usr/local/etc/rc.d/sow_database /usr/local/etc/nginx/{}sow-server-active-ws.map /usr/local/etc/nginx/{}sow-server-active-http.map {}/active-generation /usr/local/etc/periodic/hourly/{} /etc/cron.d/{}",
+        site::current().map_prefix(),
+        site::current().map_prefix(),
+        site::current().release_root(),
+        site::current().periodic_generations_script(),
+        site::current().cron_generations_file()
+    );
     let env_backups = if runtime_env {
-        format!(r#"backup=$(sudo mktemp -d /tmp/sow-config-backup.XXXXXX)
+        format!(
+            r#"backup=$(sudo mktemp -d /tmp/sow-config-backup.XXXXXX)
 for f in {config_files}; do
     if sudo test -f "$f"; then
         sudo mkdir -p "$backup$(dirname "$f")"
         sudo cp -p "$f" "$backup$f"
     fi
 done
-backup_ready=true"#)
-    } else { ":".to_owned() };
+backup_ready=true"#
+        )
+    } else {
+        ":".to_owned()
+    };
     let env_restore = if runtime_env {
-        format!(r#"if [ "$backup_ready" = true ]; then
+        format!(
+            r#"if [ "$backup_ready" = true ]; then
     for f in {config_files}; do
         if sudo test -f "$backup$f"; then sudo cp -p "$backup$f" "$f"; else sudo rm -f "$f"; fi
     done
-fi"#)
-    } else { ":".to_owned() };
+fi"#
+        )
+    } else {
+        ":".to_owned()
+    };
     let mut remote = String::from(
         r#"set -eu
 old=$(sudo readlink __SITE_RELEASE_ROOT__/current 2>/dev/null || true)
@@ -2391,7 +2701,10 @@ __SECRET_CLEANUP__
         ("__TARGET__", shell_quote(&target)),
         ("__STAGE__", shell_quote(&stage)),
         ("__RELEASES__", shell_quote(&remote_releases())),
-        ("__SITE_MAP_PREFIX__", site::current().map_prefix().to_string()),
+        (
+            "__SITE_MAP_PREFIX__",
+            site::current().map_prefix().to_string(),
+        ),
         ("__ID__", release.id.clone()),
         (
             "__DB_RESTART__",
@@ -2429,7 +2742,10 @@ __SECRET_CLEANUP__
         (
             "__SECRET_TRAP__",
             if runtime_env {
-                format!("trap 'status=$?; if [ \"$status\" -ne 0 ]; then rollback; fi; rm -f {}' EXIT", secret_files.join(" "))
+                format!(
+                    "trap 'status=$?; if [ \"$status\" -ne 0 ]; then rollback; fi; rm -f {}' EXIT",
+                    secret_files.join(" ")
+                )
             } else {
                 ":".to_string()
             },
@@ -2451,8 +2767,12 @@ __SECRET_CLEANUP__
         "sudo lockf -k /var/run/sow-server-generation.lock /bin/sh -c {}",
         shell_quote(&remote)
     );
-    run("ssh", &[&config.control_host, &locked_remote], Some(&paths.root))
-        .context("granular control-host activation failed")
+    run(
+        "ssh",
+        &[&config.control_host, &locked_remote],
+        Some(&paths.root),
+    )
+    .context("granular control-host activation failed")
 }
 
 fn server_generation_activation(release: &Release) -> String {
@@ -2632,7 +2952,9 @@ fn verify_map_catalog(config: &Config, release: &Release, plan: &ComponentPlan) 
             "ssh",
             &[
                 &config.control_host,
-                &format!("sudo grep -E 'SERVER-BOOT|Map catalog: ' {server_log} | tail -n 200 || true"),
+                &format!(
+                    "sudo grep -E 'SERVER-BOOT|Map catalog: ' {server_log} | tail -n 200 || true"
+                ),
             ],
         )?;
         match latest_map_catalog_entries(&lines) {
@@ -2706,7 +3028,10 @@ fn latest_map_catalog_entries(log: &str) -> Option<usize> {
             entries = None;
         }
         if let Some((_, report)) = line.split_once("Map catalog: ") {
-            entries = report.split_whitespace().next().and_then(|count| count.parse().ok());
+            entries = report
+                .split_whitespace()
+                .next()
+                .and_then(|count| count.parse().ok());
         }
     }
     entries
@@ -2887,7 +3212,8 @@ mod map_catalog_gate_tests {
         assert_eq!(latest_map_catalog_entries(empty), Some(0));
         let loaded = "[SERVER-BOOT] build=1\n[x INFO] Map catalog: 15 entries → /var/db/c\n";
         assert_eq!(latest_map_catalog_entries(loaded), Some(15));
-        let rebooted = "[SERVER-BOOT] build=1\n[x INFO] Map catalog: 15 entries → p\n[SERVER-BOOT] build=2\n";
+        let rebooted =
+            "[SERVER-BOOT] build=1\n[x INFO] Map catalog: 15 entries → p\n[SERVER-BOOT] build=2\n";
         assert_eq!(latest_map_catalog_entries(rebooted), None);
         let failed = "[SERVER-BOOT] build=2\n[x ERROR] Map catalog: failed to write /var/db/c\n";
         assert_eq!(latest_map_catalog_entries(failed), None);
@@ -2970,14 +3296,25 @@ mod build_fingerprint_tests {
 
     #[test]
     fn site_server_configs_validate_and_reject_speed_or_unknown_keys() {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap();
         for site in [crate::site::Site::Production, crate::site::Site::Ptr] {
             let path = super::site_server_config_path(root, site);
             let text = fs::read_to_string(&path).unwrap();
             super::validate_site_server_config_text(&path, &text).unwrap();
         }
         let dummy = std::path::Path::new("dummy.json");
-        assert!(super::validate_site_server_config_text(dummy, r#"{"global_speed_multiplier": 0.2}"#).is_err());
-        assert!(super::validate_site_server_config_text(dummy, r#"{"hero_factory_troop_income": 275.0}"#).is_err());
+        assert!(
+            super::validate_site_server_config_text(dummy, r#"{"global_speed_multiplier": 0.2}"#)
+                .is_err()
+        );
+        assert!(
+            super::validate_site_server_config_text(
+                dummy,
+                r#"{"hero_factory_troop_income": 275.0}"#
+            )
+            .is_err()
+        );
     }
 }

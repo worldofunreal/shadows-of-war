@@ -294,8 +294,24 @@ pub fn trading_post_speed_multiplier(level: u8) -> f64 {
     [1.0, 1.0, 1.15, 1.32, 1.52, 1.75, 2.05, 2.45, 2.90][usize::from(level.min(8))]
 }
 
+pub const fn cart_stop_multiplier(kind: BuildingKind) -> f64 {
+    match kind {
+        BuildingKind::TradingPost => 1.50,
+        BuildingKind::Port => 1.25,
+        BuildingKind::City => 1.00,
+        BuildingKind::Farm => 0.75,
+        BuildingKind::MilitaryCamp => 0.50,
+        BuildingKind::Tower => 0.25,
+        BuildingKind::SAM | BuildingKind::MissileSilo => 0.0,
+    }
+}
+
 pub fn military_camp_troop_level_weight(level: u8) -> f64 {
     [0.0, 1.0, 3.5, 8.0, 17.0, 53.0, 125.0, 269.0, 557.0][usize::from(level.min(8))]
+}
+
+pub fn farm_troop_level_weight(level: u8) -> f64 {
+    [0.0, 1.0, 3.0, 6.5, 13.5, 38.0, 88.0, 188.0, 388.0][usize::from(level.min(8))]
 }
 
 pub fn port_income_level_weight(level: u8) -> f64 {
@@ -375,10 +391,12 @@ pub fn snapshot_has_nuclear_launch_city(
 fn has_nuclear_launch_city(
     buildings: impl Iterator<Item = (u16, BuildingKind, u8)>,
     owner_id: u16,
-    campaign: bool,
+    _campaign: bool,
 ) -> bool {
     buildings.into_iter().any(|(owner, kind, level)| {
-        owner == owner_id && kind == BuildingKind::City && level >= nuclear_city_level(campaign)
+        owner == owner_id
+            && ((kind == BuildingKind::MilitaryCamp && level >= 5)
+                || (kind == BuildingKind::MissileSilo && level > 0))
     })
 }
 
@@ -394,6 +412,10 @@ pub fn city_gold_level_weight(level: u8) -> f64 {
 
 /// The Camp's secondary gold income follows the same upgrade curve as City gold.
 pub fn military_camp_gold_level_weight(level: u8) -> f64 {
+    gold_upgrade_level_weight(level)
+}
+
+pub fn farm_gold_level_weight(level: u8) -> f64 {
     gold_upgrade_level_weight(level)
 }
 
@@ -423,6 +445,17 @@ pub fn district_capacity_level_weight(level: u8) -> f64 {
     income_level_weight(level.saturating_sub(1))
 }
 
+/// Role-weighted troop capacity multiplier for districts that house troops.
+pub fn district_capacity_weight_for_kind(kind: BuildingKind, level: u8) -> f64 {
+    let base = income_level_weight(level);
+    match kind {
+        BuildingKind::MilitaryCamp => base * 2.0,
+        BuildingKind::Farm => base * 1.25,
+        BuildingKind::Port => base * 0.5,
+        _ => 0.0,
+    }
+}
+
 /// Per-player totals for income / fleet gates (only **ready** structures count).
 #[derive(Clone, Copy, Debug, Default, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
@@ -435,10 +468,13 @@ pub struct BuildingAggregate {
     pub port_levels: u32,
     pub port_fleet_slots: u32,
     pub military_camp_levels: u32,
+    pub farm_levels: u32,
     pub sam_levels: u32,
     pub silo_levels: u32,
     pub military_camp_troop_level_weight: f64,
     pub military_camp_gold_level_weight: f64,
+    pub farm_troop_level_weight: f64,
+    pub farm_gold_level_weight: f64,
     pub port_income_level_weight: f64,
     /// Sum of the Trading Post's gold-specific marginal weights.
     pub trading_post_income_level_weight: f64,
@@ -463,6 +499,7 @@ pub struct BuildingAggregate {
     pub count_trading_post: u32,
     pub count_port: u32,
     pub count_military_camp: u32,
+    pub count_farm: u32,
     pub count_sam: u32,
     pub count_silo: u32,
     /// Number of owned TradingPost stations connected to another building over land.
@@ -479,6 +516,7 @@ impl BuildingAggregate {
             BuildingKind::TradingPost => self.count_trading_post,
             BuildingKind::Port => self.count_port,
             BuildingKind::MilitaryCamp => self.count_military_camp,
+            BuildingKind::Farm => self.count_farm,
             BuildingKind::SAM => self.count_sam,
             BuildingKind::MissileSilo => self.count_silo,
         }
@@ -493,6 +531,7 @@ impl BuildingAggregate {
             BuildingKind::TradingPost => self.trading_post_levels,
             BuildingKind::Port => self.port_levels,
             BuildingKind::MilitaryCamp => self.military_camp_levels,
+            BuildingKind::Farm => self.farm_levels,
             BuildingKind::SAM => self.sam_levels,
             BuildingKind::MissileSilo => self.silo_levels,
         }
@@ -517,6 +556,7 @@ pub fn aggregate_buildings_per_player(
             BuildingKind::TradingPost => a.count_trading_post += 1,
             BuildingKind::Port => a.count_port += 1,
             BuildingKind::MilitaryCamp => a.count_military_camp += 1,
+            BuildingKind::Farm => a.count_farm += 1,
             BuildingKind::SAM => a.count_sam += 1,
             BuildingKind::MissileSilo => a.count_silo += 1,
         }
@@ -526,7 +566,7 @@ pub fn aggregate_buildings_per_player(
         }
         let a = &mut out[i];
         if b.kind.grants_building_troop_capacity() {
-            a.district_capacity_level_weight += district_capacity_level_weight(active_lvl);
+            a.district_capacity_level_weight += district_capacity_weight_for_kind(b.kind, active_lvl);
         }
         match b.kind {
             BuildingKind::City => {
@@ -539,6 +579,10 @@ pub fn aggregate_buildings_per_player(
             }
             BuildingKind::Tower => {
                 a.tower_levels += active_lvl as u32;
+                if active_lvl >= 5 {
+                    a.sam_levels += u32::from(active_lvl - 4);
+                    a.count_sam += 1;
+                }
             }
             BuildingKind::TradingPost => {
                 a.trading_post_levels += active_lvl as u32;
@@ -557,6 +601,15 @@ pub fn aggregate_buildings_per_player(
                 a.military_camp_levels += active_lvl as u32;
                 a.military_camp_troop_level_weight += military_camp_troop_level_weight(active_lvl);
                 a.military_camp_gold_level_weight += military_camp_gold_level_weight(active_lvl);
+                if active_lvl >= 5 {
+                    a.silo_levels += u32::from(active_lvl - 4);
+                    a.count_silo += 1;
+                }
+            }
+            BuildingKind::Farm => {
+                a.farm_levels += active_lvl as u32;
+                a.farm_troop_level_weight += farm_troop_level_weight(active_lvl);
+                a.farm_gold_level_weight += farm_gold_level_weight(active_lvl);
             }
             BuildingKind::SAM => a.sam_levels += u32::from(active_lvl),
             BuildingKind::MissileSilo => a.silo_levels += u32::from(active_lvl),

@@ -37,8 +37,9 @@ pub enum District {
     #[serde(rename = "trading_post", alias = "factory")]
     TradingPost,
     Port,
-    #[serde(rename = "military_camp", alias = "farm")]
+    #[serde(rename = "military_camp")]
     MilitaryCamp,
+    Farm,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

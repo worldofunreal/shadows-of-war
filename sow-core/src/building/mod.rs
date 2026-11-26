@@ -411,7 +411,7 @@ mod tests {
         let city = Building {
             id: 1,
             owner_id: owner,
-            tile_idx: click,
+            tile_idx: 10 * w + 4,
             kind: BuildingKind::City,
             level: 1,
             under_construction: false,
@@ -432,7 +432,7 @@ mod tests {
             .contains(&click)
         );
 
-        let water = map.ref_id(7, 10);
+        let water = map.ref_id(8, 10);
         map.terrain[water] = MapTile::from_byte(0);
         let choices = valid_land_structure_indices(
             &map,
@@ -490,31 +490,37 @@ mod tests {
         let mut grid = BuildingGrid::default();
         grid.rebuild(existing.iter(), w, h);
 
-        for kind in BuildingKind::ALL {
+        let cfg = crate::game_config::GameConfig::default();
+        let cities = city_anchors_from_buildings(&existing, w);
+        for kind in [
+            BuildingKind::City,
+            BuildingKind::Farm,
+            BuildingKind::TradingPost,
+            BuildingKind::Port,
+            BuildingKind::Tower,
+            BuildingKind::MilitaryCamp,
+        ] {
             for &(x, y) in &[
                 (2, 2),
                 (8, 8),
+                (11, 8),
                 (20, 10),
-                (13, 8),
                 (30, 30),
                 (39, 39),
                 (42, 10),
             ] {
                 let click = xy_idx(x, y, w);
                 let expected = if kind == BuildingKind::City {
-                    matches!((x, y), (2, 2) | (20, 10) | (30, 30)).then_some(click)
+                    matches!((x, y), (30, 30)).then_some(())
+                } else if kind == BuildingKind::Port {
+                    None
                 } else {
-                    let on_parent_city = (x, y) == (8, 8) && kind != BuildingKind::TradingPost;
-                    (on_parent_city && kind != BuildingKind::Port).then_some(click)
+                    matches!((x, y), (11, 8) | (20, 10)).then_some(())
                 };
-                let actual = resolve_structure_spawn_tile(
-                    &map,
-                    1,
-                    kind,
-                    click,
-                    &grid,
-                    &mut crate::engine::PlacementScratch::default(),
-                );
+                let actual = validate_match_structure_site(
+                    &map, 1, kind, click, &grid, &cities, None, &cfg,
+                )
+                .ok();
                 assert_eq!(actual, expected, "kind={kind:?} click=({x},{y})");
             }
         }

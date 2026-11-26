@@ -16,7 +16,7 @@ use log::{error, info, warn};
 use rand::RngCore;
 use redb::ReadableTableMetadata;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -26,6 +26,11 @@ use tower_http::cors::{Any, CorsLayer};
 const MAX_INTERNAL_REQUEST_BYTES: usize = 32 * 1024 * 1024;
 const MAX_ANALYTICS_REQUEST_BYTES: usize = 256 * 1024;
 const MAX_ANALYTICS_BATCH_EVENTS: usize = 100;
+const PUBLIC_LEADERBOARD_CACHE_TTL: Duration = Duration::from_secs(15);
+const PUBLIC_PROFILE_CACHE_TTL: Duration = Duration::from_secs(10);
+const PUBLIC_PROFILE_CACHE_MAX_ENTRIES: usize = 512;
+const PUBLIC_READ_RATE_LIMIT_PER_MIN: usize = 120;
+const PUBLIC_SEARCH_RATE_LIMIT_PER_MIN: usize = 25;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -51,6 +56,30 @@ struct AppState {
     match_artifact_lock: tokio::sync::Mutex<()>,
     match_results: tokio::sync::broadcast::Sender<String>,
     leader_rate_limits: std::sync::Mutex<HashMap<String, LeaderRateLimitState>>,
+    leaderboard_cache: tokio::sync::RwLock<HashMap<String, CachedLeaderboard>>,
+    public_profile_cache: std::sync::Mutex<HashMap<String, CachedPublicProfile>>,
+    public_api_rate_limits: std::sync::Mutex<HashMap<String, PublicRateLimitState>>,
+}
+
+#[derive(Clone)]
+struct CachedLeaderboard {
+    epoch: u64,
+    built_at: Instant,
+    updated_at: u64,
+    ranked: Option<Arc<Vec<sow_data::PublicLeaderboardEntry>>>,
+    victories: Option<Arc<Vec<sow_data::PublicVictoryLeaderboardEntry>>>,
+}
+
+#[derive(Clone)]
+struct CachedPublicProfile {
+    epoch: u64,
+    built_at: Instant,
+    body: Bytes,
+}
+
+#[derive(Debug, Clone, Default)]
+struct PublicRateLimitState {
+    timestamps: Vec<Instant>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -166,6 +195,7 @@ struct MatchStartRequest {
 #[derive(Deserialize)]
 struct BotPoolSeedRequest {
     external_ids: Vec<String>,
+    display_names: Vec<String>,
 }
 
 #[derive(Deserialize, Default)]
@@ -188,6 +218,11 @@ struct PublicLeaderboardQuery {
     queue: Option<String>,
     mode: Option<String>,
     kind: Option<String>,
+    tier: Option<String>,
+    leader: Option<String>,
+    q: Option<String>,
+    min_games: Option<u32>,
+    sort: Option<String>,
     cursor: Option<usize>,
     limit: Option<usize>,
 }
@@ -466,7 +501,9 @@ async fn store_account_for_request(
 
     if let Some(token) = token {
         let account_id = match platform_provider {
-            "" | "sow" => state.auth.verify_token(&token)
+            "" | "sow" => state
+                .auth
+                .verify_token(&token)
                 .map_err(|error| (StatusCode::UNAUTHORIZED, Json(ErrorResponse { error })))?,
             "playgames" => {
                 let external_id = state
@@ -497,12 +534,9 @@ async fn store_account_for_request(
                 account.id
             }
             "crazygames" => {
-                let external_id =
-                    resolve_external_id(state, "crazygames", "", Some(&token))
-                        .await
-                        .map_err(|error| {
-                            (StatusCode::UNAUTHORIZED, Json(ErrorResponse { error }))
-                        })?;
+                let external_id = resolve_external_id(state, "crazygames", "", Some(&token))
+                    .await
+                    .map_err(|error| (StatusCode::UNAUTHORIZED, Json(ErrorResponse { error })))?;
                 state
                     .db
                     .get_existing_identity("crazygames".to_string(), external_id)
@@ -693,7 +727,11 @@ async fn handle_double_match_reward(
         Ok(account_id) => account_id,
         Err(response) => return response.into_response(),
     };
-    match state.db.double_match_reward(&account_id, &payload.match_id).await {
+    match state
+        .db
+        .double_match_reward(&account_id, &payload.match_id)
+        .await
+    {
         Ok(account) => (StatusCode::OK, Json(account.without_auth_secret())).into_response(),
         Err(error) => (
             StatusCode::CONFLICT,
@@ -1036,7 +1074,10 @@ async fn handle_report_player(
     Json(payload): Json<ReportPlayerRequest>,
 ) -> impl IntoResponse {
     let account_id = payload.account_id.trim();
-    if store_account_for_request(&state, &headers, account_id, payload.auth_secret.as_deref()).await.is_err() {
+    if store_account_for_request(&state, &headers, account_id, payload.auth_secret.as_deref())
+        .await
+        .is_err()
+    {
         warn!("[moderation] report rejected ownership proof");
         return (
             StatusCode::UNAUTHORIZED,
@@ -1145,7 +1186,10 @@ async fn handle_blocks(
     Json(payload): Json<BlocksRequest>,
 ) -> impl IntoResponse {
     let account_id = payload.account_id.trim();
-    if store_account_for_request(&state, &headers, account_id, payload.auth_secret.as_deref()).await.is_err() {
+    if store_account_for_request(&state, &headers, account_id, payload.auth_secret.as_deref())
+        .await
+        .is_err()
+    {
         warn!("[moderation] blocks read rejected ownership proof");
         return (
             StatusCode::UNAUTHORIZED,
@@ -1227,7 +1271,10 @@ async fn handle_self_delete(
     Json(payload): Json<SelfDeleteRequest>,
 ) -> impl IntoResponse {
     let account_id = payload.account_id.trim();
-    if store_account_for_request(&state, &headers, account_id, payload.auth_secret.as_deref()).await.is_err() {
+    if store_account_for_request(&state, &headers, account_id, payload.auth_secret.as_deref())
+        .await
+        .is_err()
+    {
         warn!("[privacy] self-delete rejected ownership proof");
         return (
             StatusCode::UNAUTHORIZED,
@@ -1349,9 +1396,15 @@ async fn handle_internal_verify(
             _ => Err("anonymous verification requires account_id and token".to_string()),
         },
         "sow" => state.auth.verify_token(&payload.token).and_then(|id| {
-            if payload.account_id.as_deref().is_some_and(|requested| requested != id) {
+            if payload
+                .account_id
+                .as_deref()
+                .is_some_and(|requested| requested != id)
+            {
                 Err("account does not match session".into())
-            } else { Ok(id) }
+            } else {
+                Ok(id)
+            }
         }),
         "crazygames" | "playgames" => {
             Err("external identities must be verified by sow-server".to_string())
@@ -1468,7 +1521,10 @@ async fn handle_internal_identity_resolve(
             )
             .await
     } else {
-        state.db.resolve_verified_identity(provider, environment, external_subject, None).await
+        state
+            .db
+            .resolve_verified_identity(provider, environment, external_subject, None)
+            .await
     };
     let account = match account_result {
         Ok(account) => account,
@@ -1865,6 +1921,9 @@ async fn main() {
         match_artifact_lock: tokio::sync::Mutex::new(()),
         match_results: tokio::sync::broadcast::channel(256).0,
         leader_rate_limits: std::sync::Mutex::new(HashMap::new()),
+        leaderboard_cache: tokio::sync::RwLock::new(HashMap::new()),
+        public_profile_cache: std::sync::Mutex::new(HashMap::new()),
+        public_api_rate_limits: std::sync::Mutex::new(HashMap::new()),
     });
 
     tokio::spawn(match_exit::worker(
@@ -1923,7 +1982,10 @@ async fn main() {
             post(handle_event).layer(DefaultBodyLimit::max(MAX_ANALYTICS_REQUEST_BYTES)),
         )
         .route("/internal/match-id-seed", get(handle_match_id_seed))
-        .route("/internal/release-work/{release_id}", get(handle_release_work))
+        .route(
+            "/internal/release-work/{release_id}",
+            get(handle_release_work),
+        )
         .route("/profile", get(handle_get_profile))
         .route("/auth/playgames/exchange", post(handle_playgames_exchange))
         .route("/auth/playgames/consume", post(handle_playgames_consume))
@@ -1962,6 +2024,10 @@ async fn main() {
         .route("/matches/{match_id}", get(handle_public_match_detail))
         .route("/seasons/current", get(handle_current_season))
         .route(
+            "/seasons/current/leaderboard",
+            get(handle_current_season_leaderboard),
+        )
+        .route(
             "/seasons/{season_id}/leaderboard",
             get(handle_public_leaderboard),
         )
@@ -1974,7 +2040,10 @@ async fn main() {
         .route("/profile/tutorial-complete", post(handle_tutorial_complete))
         .route("/profile/match-result", post(match_exit::handle_result))
         .route("/profile/campaign-complete", post(handle_campaign_complete))
-        .route("/profile/campaign/claim-hero", post(handle_campaign_hero_claim))
+        .route(
+            "/profile/campaign/claim-hero",
+            post(handle_campaign_hero_claim),
+        )
         .route("/profile/leader-selection", post(handle_leader_selection))
         .route(
             "/profile/menu-guide-progress",
@@ -2015,7 +2084,10 @@ async fn main() {
         )
         .route("/internal/bot-pool/seed", post(handle_bot_pool_seed))
         .route("/internal/ranked-bot", post(handle_ranked_bot))
-        .route("/internal/ranked-bots/available", post(handle_available_ranked_bots))
+        .route(
+            "/internal/ranked-bots/available",
+            post(handle_available_ranked_bots),
+        )
         .route("/internal/ranked-rating", post(handle_ranked_rating))
         .layer(DefaultBodyLimit::max(MAX_INTERNAL_REQUEST_BYTES))
         .layer(cors)
@@ -2033,16 +2105,123 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
+fn public_client_ip(headers: &HeaderMap) -> String {
+    for name in ["cf-connecting-ip", "x-real-ip"] {
+        if let Some(value) = headers
+            .get(name)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.trim().parse::<std::net::IpAddr>().ok())
+        {
+            return value.to_string();
+        }
+    }
+    "direct".to_string()
+}
+
+fn eval_public_rate_limit(
+    limits: &mut HashMap<String, PublicRateLimitState>,
+    bucket_key: &str,
+    max_per_minute: usize,
+    now: Instant,
+) -> Result<(), u64> {
+    if limits.len() > 10_000 {
+        limits.retain(|_, state| {
+            state
+                .timestamps
+                .last()
+                .is_some_and(|t| now.duration_since(*t) <= Duration::from_secs(60))
+        });
+    }
+    let state = limits.entry(bucket_key.to_string()).or_default();
+    state
+        .timestamps
+        .retain(|t| now.duration_since(*t) <= Duration::from_secs(60));
+    if state.timestamps.len() >= max_per_minute {
+        let retry_after = state
+            .timestamps
+            .first()
+            .map(|oldest| 60_u64.saturating_sub(now.duration_since(*oldest).as_secs()))
+            .unwrap_or(10)
+            .max(1);
+        return Err(retry_after);
+    }
+    state.timestamps.push(now);
+    Ok(())
+}
+
+fn check_public_rate_limit(
+    state: &AppState,
+    headers: &HeaderMap,
+    scope: &str,
+    max_per_minute: usize,
+) -> Result<(), axum::response::Response> {
+    let ip = public_client_ip(headers);
+    let key = format!("{scope}:{ip}");
+    let res = {
+        let mut limits = state.public_api_rate_limits.lock().unwrap();
+        eval_public_rate_limit(&mut limits, &key, max_per_minute, Instant::now())
+    };
+    if let Err(retry_after) = res {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            [(header::RETRY_AFTER, retry_after.to_string())],
+            Json(ErrorResponse {
+                error: "rate limit exceeded".to_string(),
+            }),
+        )
+            .into_response());
+    }
+    Ok(())
+}
+
+fn bad_public_request(message: &str) -> axum::response::Response {
+    (
+        StatusCode::BAD_REQUEST,
+        Json(ErrorResponse {
+            error: message.to_string(),
+        }),
+    )
+        .into_response()
+}
+
+fn is_valid_query_token(value: &str, max_len: usize) -> bool {
+    !value.is_empty()
+        && value.len() <= max_len
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+}
+
 async fn handle_public_profile_search(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Query(query): Query<PublicSearchQuery>,
 ) -> impl IntoResponse {
+    if let Err(resp) =
+        check_public_rate_limit(&state, &headers, "search", PUBLIC_SEARCH_RATE_LIMIT_PER_MIN)
+    {
+        return resp;
+    }
+    let query_text = query.q.as_deref().unwrap_or("").trim();
+    if query_text.len() > 48 {
+        return bad_public_request("search query too long");
+    }
     let limit = query.limit.unwrap_or(20).clamp(1, 20);
-    let cursor = query.cursor.unwrap_or(0).min(10_000);
-    let query_text = query.q.as_deref().unwrap_or("");
+    let cursor = query.cursor.unwrap_or(0).min(200);
+    if query_text.chars().count() < 2 {
+        return (
+            StatusCode::OK,
+            [(header::CACHE_CONTROL, "public, max-age=5")],
+            Json(serde_json::json!({
+                "items": [],
+                "next_cursor": serde_json::Value::Null
+            })),
+        )
+            .into_response();
+    }
     match state
         .db
-        .search_public_profiles(query_text, cursor.saturating_add(limit))
+        .search_public_profiles(query_text, cursor.saturating_add(limit).saturating_add(1))
         .await
     {
         Ok(mut profiles) => {
@@ -2051,11 +2230,12 @@ async fn handle_public_profile_search(
             } else {
                 profiles.clear();
             }
+            let has_next = profiles.len() > limit;
             profiles.truncate(limit);
-            let has_next = profiles.len() == limit;
             let next_cursor = has_next.then_some(cursor.saturating_add(limit));
             (
                 StatusCode::OK,
+                [(header::CACHE_CONTROL, "public, max-age=10, stale-while-revalidate=15")],
                 Json(serde_json::json!({
                     "items": profiles,
                     "next_cursor": next_cursor
@@ -2078,10 +2258,80 @@ async fn handle_public_profile_search(
 
 async fn handle_public_profile(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Path(account_id): Path<String>,
 ) -> impl IntoResponse {
+    if let Err(resp) =
+        check_public_rate_limit(&state, &headers, "read", PUBLIC_READ_RATE_LIMIT_PER_MIN)
+    {
+        return resp;
+    }
+    let account_id = account_id.trim().to_string();
+    if !sow_data::profile::is_valid_account_id(&account_id) {
+        return bad_public_request("invalid account id");
+    }
+    let epoch = state.db.leaderboard_epoch();
+    {
+        let cache = state.public_profile_cache.lock().unwrap();
+        if let Some(cached) = cache.get(&account_id)
+            && cached.epoch == epoch
+            && cached.built_at.elapsed() <= PUBLIC_PROFILE_CACHE_TTL
+        {
+            return (
+                StatusCode::OK,
+                [
+                    (header::CONTENT_TYPE, "application/json"),
+                    (header::CACHE_CONTROL, "public, max-age=10, stale-while-revalidate=20"),
+                ],
+                cached.body.clone(),
+            )
+                .into_response();
+        }
+    }
     match state.db.public_profile(&account_id).await {
-        Ok(Some(profile)) => (StatusCode::OK, Json(profile)).into_response(),
+        Ok(Some(profile)) => {
+            let body = match serde_json::to_vec(&profile) {
+                Ok(vec) => Bytes::from(vec),
+                Err(error) => {
+                    error!("public profile serialization failed: {error}");
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(ErrorResponse {
+                            error: "profiles unavailable".to_string(),
+                        }),
+                    )
+                        .into_response();
+                }
+            };
+            {
+                let mut cache = state.public_profile_cache.lock().unwrap();
+                if cache.len() >= PUBLIC_PROFILE_CACHE_MAX_ENTRIES {
+                    cache.retain(|_, item| {
+                        item.epoch == epoch && item.built_at.elapsed() <= PUBLIC_PROFILE_CACHE_TTL
+                    });
+                    if cache.len() >= PUBLIC_PROFILE_CACHE_MAX_ENTRIES {
+                        cache.clear();
+                    }
+                }
+                cache.insert(
+                    account_id,
+                    CachedPublicProfile {
+                        epoch,
+                        built_at: Instant::now(),
+                        body: body.clone(),
+                    },
+                );
+            }
+            (
+                StatusCode::OK,
+                [
+                    (header::CONTENT_TYPE, "application/json"),
+                    (header::CACHE_CONTROL, "public, max-age=10, stale-while-revalidate=20"),
+                ],
+                body,
+            )
+                .into_response()
+        }
         Ok(None) => (
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
@@ -2104,16 +2354,31 @@ async fn handle_public_profile(
 
 async fn handle_public_match_history(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Path(account_id): Path<String>,
     Query(query): Query<PublicHistoryQuery>,
 ) -> impl IntoResponse {
+    if let Err(resp) =
+        check_public_rate_limit(&state, &headers, "read", PUBLIC_READ_RATE_LIMIT_PER_MIN)
+    {
+        return resp;
+    }
+    let account_id = account_id.trim();
+    if !sow_data::profile::is_valid_account_id(account_id) {
+        return bad_public_request("invalid account id");
+    }
+    let queue = query.queue.as_deref().map(str::trim).filter(|v| !v.is_empty());
+    let mode = query.mode.as_deref().map(str::trim).filter(|v| !v.is_empty());
+    if queue.is_some_and(|v| !is_valid_query_token(v, 32))
+        || mode.is_some_and(|v| !is_valid_query_token(v, 32))
+    {
+        return bad_public_request("invalid history filter");
+    }
     let limit = query.limit.unwrap_or(20).clamp(1, 50);
     let cursor = query.cursor.unwrap_or(0).min(10_000);
-    let queue = query.queue.as_deref();
-    let mode = query.mode.as_deref();
     match state
         .db
-        .public_match_history(&account_id, cursor, limit, queue, mode)
+        .public_match_history(account_id, cursor, limit, queue, mode)
         .await
     {
         Ok(Some(history)) => {
@@ -2126,6 +2391,7 @@ async fn handle_public_match_history(
             let items = history.into_iter().take(limit).collect::<Vec<_>>();
             (
                 StatusCode::OK,
+                [(header::CACHE_CONTROL, "public, max-age=10, stale-while-revalidate=20")],
                 Json(serde_json::json!({
                     "items": items,
                     "next_cursor": next_cursor,
@@ -2155,10 +2421,32 @@ async fn handle_public_match_history(
 
 async fn handle_public_match_detail(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Path(match_id): Path<String>,
 ) -> impl IntoResponse {
-    match state.db.public_match_detail(&match_id) {
-        Ok(Some(detail)) => (StatusCode::OK, Json(detail)).into_response(),
+    if let Err(resp) =
+        check_public_rate_limit(&state, &headers, "read", PUBLIC_READ_RATE_LIMIT_PER_MIN)
+    {
+        return resp;
+    }
+    let match_id = match_id.trim();
+    if !sow_data::profile::is_valid_match_id(match_id) {
+        return bad_public_request("invalid match id");
+    }
+    match state.db.public_match_detail(match_id) {
+        Ok(Some(detail)) => {
+            let cache_control = if detail.verified {
+                "public, max-age=300, immutable"
+            } else {
+                "public, max-age=15"
+            };
+            (
+                StatusCode::OK,
+                [(header::CACHE_CONTROL, cache_control)],
+                Json(detail),
+            )
+                .into_response()
+        }
         Ok(None) => (
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
@@ -2181,11 +2469,22 @@ async fn handle_public_match_detail(
 
 async fn handle_public_profile_seasons(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Path(account_id): Path<String>,
 ) -> impl IntoResponse {
-    match state.db.public_ratings(&account_id).await {
+    if let Err(resp) =
+        check_public_rate_limit(&state, &headers, "read", PUBLIC_READ_RATE_LIMIT_PER_MIN)
+    {
+        return resp;
+    }
+    let account_id = account_id.trim();
+    if !sow_data::profile::is_valid_account_id(account_id) {
+        return bad_public_request("invalid account id");
+    }
+    match state.db.public_ratings(account_id).await {
         Ok(Some(ratings)) => (
             StatusCode::OK,
+            [(header::CACHE_CONTROL, "public, max-age=10, stale-while-revalidate=20")],
             Json(serde_json::json!({ "items": ratings })),
         )
             .into_response(),
@@ -2218,6 +2517,7 @@ async fn handle_current_season(State(state): State<Arc<AppState>>) -> impl IntoR
                 .cloned();
             (
                 StatusCode::OK,
+                [(header::CACHE_CONTROL, "public, max-age=60")],
                 Json(serde_json::json!({
                     "season": current,
                     "items": seasons,
@@ -2238,11 +2538,137 @@ async fn handle_current_season(State(state): State<Arc<AppState>>) -> impl IntoR
     }
 }
 
+const RANKED_TIER_KEYS: [&str; 10] = [
+    "nomad",
+    "chieftain",
+    "commander",
+    "governor",
+    "king",
+    "emperor",
+    "sovereign",
+    "overlord",
+    "immortal",
+    "deity",
+];
+
+fn empty_tier_counts() -> BTreeMap<String, usize> {
+    RANKED_TIER_KEYS
+        .iter()
+        .map(|key| ((*key).to_string(), 0))
+        .collect()
+}
+
+fn entry_matches_leader_filter(
+    preferred_leader: Option<&str>,
+    wanted: sow_data::Leader,
+) -> bool {
+    preferred_leader
+        .and_then(sow_data::commerce::leader_from_any_id)
+        .is_some_and(|leader| leader == wanted)
+}
+
+async fn load_cached_leaderboard_snapshot(
+    state: &Arc<AppState>,
+    season_id: u32,
+    victories: bool,
+    queue: &str,
+    mode: &str,
+) -> Result<CachedLeaderboard, Box<dyn std::error::Error + Send + Sync>> {
+    let epoch = state.db.leaderboard_epoch();
+    let cache_key = if victories {
+        format!("{season_id}:victories")
+    } else {
+        format!("{season_id}:ranked:{queue}:{mode}")
+    };
+    {
+        let cache = state.leaderboard_cache.read().await;
+        if let Some(entry) = cache.get(&cache_key)
+            && entry.epoch == epoch
+            && entry.built_at.elapsed() <= PUBLIC_LEADERBOARD_CACHE_TTL
+        {
+            return Ok(entry.clone());
+        }
+    }
+    let db = state.db.clone();
+    let queue_owned = queue.to_string();
+    let mode_owned = mode.to_string();
+    let snapshot = tokio::task::spawn_blocking(move || {
+        if victories {
+            let entries = db.public_victory_leaderboard_snapshot()?;
+            Ok::<_, Box<dyn std::error::Error + Send + Sync>>((None, Some(Arc::new(entries))))
+        } else {
+            let entries =
+                db.public_ranked_leaderboard_snapshot(season_id, &queue_owned, &mode_owned)?;
+            Ok((Some(Arc::new(entries)), None))
+        }
+    })
+    .await
+    .map_err(|error| Box::<dyn std::error::Error + Send + Sync>::from(error.to_string()))??;
+    let updated_at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let built = CachedLeaderboard {
+        epoch,
+        built_at: Instant::now(),
+        updated_at,
+        ranked: snapshot.0,
+        victories: snapshot.1,
+    };
+    {
+        let mut cache = state.leaderboard_cache.write().await;
+        if cache.len() > 32 {
+            cache.retain(|_, v| v.built_at.elapsed() <= PUBLIC_LEADERBOARD_CACHE_TTL);
+        }
+        cache.insert(cache_key, built.clone());
+    }
+    Ok(built)
+}
+
+fn leaderboard_etag(epoch: u64, fingerprint_parts: &str) -> String {
+    let hash = blake3::hash(format!("{epoch}:{fingerprint_parts}").as_bytes()).to_hex();
+    format!("W/\"lb-{epoch}-{}\"", &hash[..16])
+}
+
+fn request_matches_etag(headers: &HeaderMap, etag: &str) -> bool {
+    let Some(header_value) = headers
+        .get(header::IF_NONE_MATCH)
+        .and_then(|value| value.to_str().ok())
+    else {
+        return false;
+    };
+    let strong = etag.strip_prefix("W/").unwrap_or(etag);
+    header_value.split(',').map(str::trim).any(|candidate| {
+        let normalized = candidate.strip_prefix("W/").unwrap_or(candidate);
+        candidate == "*" || normalized == strong
+    })
+}
+
+async fn handle_current_season_leaderboard(
+    state: State<Arc<AppState>>,
+    headers: HeaderMap,
+    query: Query<PublicLeaderboardQuery>,
+) -> impl IntoResponse {
+    handle_public_leaderboard(
+        state,
+        headers,
+        Path(sow_data::profile::CURRENT_SEASON_ID),
+        query,
+    )
+    .await
+}
+
 async fn handle_public_leaderboard(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Path(season_id): Path<u32>,
     Query(query): Query<PublicLeaderboardQuery>,
 ) -> impl IntoResponse {
+    if let Err(resp) =
+        check_public_rate_limit(&state, &headers, "read", PUBLIC_READ_RATE_LIMIT_PER_MIN)
+    {
+        return resp;
+    }
     if season_id != sow_data::profile::CURRENT_SEASON_ID {
         return (
             StatusCode::NOT_FOUND,
@@ -2252,81 +2678,308 @@ async fn handle_public_leaderboard(
         )
             .into_response();
     }
-    if query.kind.as_deref() == Some("victories") {
-        let limit = query.limit.unwrap_or(100).clamp(1, 100);
-        let cursor = query.cursor.unwrap_or(0).min(10_000);
-        return match state.db.public_victory_leaderboard(cursor, limit + 1).await {
-            Ok(mut items) => {
-                let next_cursor = leaderboard_next_cursor(cursor, limit, items.len());
-                items.truncate(limit);
-                (
-                    StatusCode::OK,
-                    Json(serde_json::json!({
-                        "season_id": season_id,
-                        "metric": "victories",
-                        "items": items,
-                        "next_cursor": next_cursor,
-                    })),
-                )
-                    .into_response()
+    let kind_raw = query.kind.as_deref().map(str::trim).filter(|v| !v.is_empty());
+    let is_victories = match kind_raw {
+        None | Some("ranked") => false,
+        Some("victories") => true,
+        _ => return bad_public_request("invalid leaderboard kind"),
+    };
+    let leader_raw = query
+        .leader
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty() && !v.eq_ignore_ascii_case("all"));
+    let wanted_leader = match leader_raw {
+        None => None,
+        Some(raw) => {
+            if raw.len() > 48 {
+                return bad_public_request("invalid leader filter");
             }
-            Err(error) => {
-                error!("victories leaderboard lookup failed: {error}");
+            match sow_data::commerce::leader_from_any_id(raw) {
+                Some(leader) => Some(leader),
+                None => return bad_public_request("unknown leader filter"),
+            }
+        }
+    };
+    let search_q = query.q.as_deref().unwrap_or("").trim();
+    if search_q.chars().count() > 48 {
+        return bad_public_request("search query too long");
+    }
+    let needle = search_q.to_lowercase();
+    let min_games = query.min_games.unwrap_or(0).min(500);
+    let limit = query.limit.unwrap_or(100).clamp(1, 100);
+    let cursor = query.cursor.unwrap_or(0).min(2_000);
+
+    if is_victories {
+        let sort = query
+            .sort
+            .as_deref()
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .unwrap_or("wins");
+        if !matches!(sort, "wins" | "win_rate" | "matches" | "level") {
+            return bad_public_request("invalid victories sort");
+        }
+        if query
+            .tier
+            .as_deref()
+            .map(str::trim)
+            .is_some_and(|v| !v.is_empty() && !v.eq_ignore_ascii_case("all"))
+        {
+            return bad_public_request("tier filter is not supported for victories leaderboard");
+        }
+        let snapshot =
+            match load_cached_leaderboard_snapshot(&state, season_id, true, "", "").await {
+                Ok(snapshot) => snapshot,
+                Err(error) => {
+                    error!("victories leaderboard lookup failed: {error}");
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(ErrorResponse {
+                            error: "leaderboard unavailable".to_string(),
+                        }),
+                    )
+                        .into_response();
+                }
+            };
+        let all = snapshot.victories.as_deref().map_or(&[][..], |v| v.as_slice());
+        let etag = leaderboard_etag(
+            snapshot.epoch,
+            &format!(
+                "victories:{}:{min_games}:{needle}:{sort}:{cursor}:{limit}",
+                wanted_leader.map_or("", |l| l.id())
+            ),
+        );
+        if request_matches_etag(&headers, &etag) {
+            return (
+                StatusCode::NOT_MODIFIED,
+                [
+                    (header::ETAG, etag),
+                    (
+                        header::CACHE_CONTROL,
+                        "public, max-age=15, stale-while-revalidate=30".to_string(),
+                    ),
+                ],
+            )
+                .into_response();
+        }
+        let mut filtered: Vec<sow_data::PublicVictoryLeaderboardEntry> = all
+            .iter()
+            .filter(|entry| {
+                entry.matches_played >= min_games
+                    && (needle.is_empty()
+                        || entry.handle.to_lowercase().contains(&needle)
+                        || entry.account_id.to_lowercase().contains(&needle))
+                    && wanted_leader.is_none_or(|leader| {
+                        entry_matches_leader_filter(entry.preferred_leader.as_deref(), leader)
+                    })
+            })
+            .cloned()
+            .collect();
+        match sort {
+            "win_rate" => filtered.sort_by(|a, b| {
+                b.win_rate
+                    .total_cmp(&a.win_rate)
+                    .then_with(|| a.rank.cmp(&b.rank))
+            }),
+            "matches" => filtered.sort_by(|a, b| {
+                b.matches_played
+                    .cmp(&a.matches_played)
+                    .then_with(|| a.rank.cmp(&b.rank))
+            }),
+            "level" => filtered.sort_by(|a, b| {
+                b.level.cmp(&a.level).then_with(|| a.rank.cmp(&b.rank))
+            }),
+            _ => {}
+        }
+        let total_count = filtered.len();
+        let slice_end = cursor.saturating_add(limit).min(total_count);
+        let items = if cursor < total_count {
+            filtered[cursor..slice_end].to_vec()
+        } else {
+            Vec::new()
+        };
+        let next_cursor = (slice_end < total_count).then_some(slice_end);
+        return (
+            StatusCode::OK,
+            [
+                (header::ETAG, etag),
                 (
+                    header::CACHE_CONTROL,
+                    "public, max-age=15, stale-while-revalidate=30".to_string(),
+                ),
+            ],
+            Json(serde_json::json!({
+                "season_id": season_id,
+                "metric": "victories",
+                "items": items,
+                "next_cursor": next_cursor,
+                "total_count": total_count,
+                "tier_counts": empty_tier_counts(),
+                "updated_at": snapshot.updated_at,
+            })),
+        )
+            .into_response();
+    }
+
+    let queue = query
+        .queue
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .unwrap_or("Ranked1v1");
+    if !matches!(queue, "Ranked1v1" | "RankedFFA" | "Matchmaking") {
+        return bad_public_request("invalid leaderboard queue");
+    }
+    let mode = query
+        .mode
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .unwrap_or("FFA");
+    if mode != "FFA" {
+        return bad_public_request("invalid leaderboard mode");
+    }
+    let tier_raw = query
+        .tier
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty() && !v.eq_ignore_ascii_case("all"));
+    let wanted_tier = match tier_raw {
+        None => None,
+        Some(raw) => match sow_data::profile::canonical_tier_key(raw) {
+            Some(tier) => Some(tier),
+            None => return bad_public_request("invalid tier filter"),
+        },
+    };
+    let sort = query
+        .sort
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .unwrap_or("score");
+    if !matches!(sort, "score" | "win_rate" | "wins" | "peak" | "games") {
+        return bad_public_request("invalid leaderboard sort");
+    }
+
+    let snapshot =
+        match load_cached_leaderboard_snapshot(&state, season_id, false, queue, mode).await {
+            Ok(snapshot) => snapshot,
+            Err(error) => {
+                error!("public leaderboard lookup failed: {error}");
+                return (
                     StatusCode::SERVICE_UNAVAILABLE,
                     Json(ErrorResponse {
                         error: "leaderboard unavailable".to_string(),
                     }),
                 )
-                    .into_response()
+                    .into_response();
             }
         };
+
+    let all = snapshot.ranked.as_deref().map_or(&[][..], |v| v.as_slice());
+    let etag = leaderboard_etag(
+        snapshot.epoch,
+        &format!(
+            "ranked:{queue}:{mode}:{}:{}:{min_games}:{needle}:{sort}:{cursor}:{limit}",
+            wanted_tier.unwrap_or("all"),
+            wanted_leader.map_or("", |l| l.id())
+        ),
+    );
+    if request_matches_etag(&headers, &etag) {
+        return (
+            StatusCode::NOT_MODIFIED,
+            [
+                (header::ETAG, etag),
+                (
+                    header::CACHE_CONTROL,
+                    "public, max-age=15, stale-while-revalidate=30".to_string(),
+                ),
+            ],
+        )
+            .into_response();
     }
-    let queue = query.queue.as_deref().unwrap_or("Matchmaking");
-    let mode = query.mode.as_deref().unwrap_or("FFA");
-    let limit = query.limit.unwrap_or(100).clamp(1, 100);
-    let cursor = query.cursor.unwrap_or(0).min(10_000);
-    match state
-        .db
-        .public_leaderboard(queue, mode, cursor.saturating_add(limit).saturating_add(1))
-        .await
-    {
-        Ok(mut items) => {
-            if cursor < items.len() {
-                items.drain(..cursor);
-            } else {
-                items.clear();
-            }
-            let next_cursor = leaderboard_next_cursor(cursor, limit, items.len());
-            for (index, item) in items.iter_mut().enumerate() {
-                item.rank = cursor.saturating_add(index + 1).min(u32::MAX as usize) as u32;
-            }
-            items.truncate(limit);
-            (
-                StatusCode::OK,
-                Json(serde_json::json!({
-                    "season_id": season_id,
-                    "queue": queue,
-                    "mode": mode,
-                    "items": items,
-                    "next_cursor": next_cursor,
-                })),
-            )
-                .into_response()
+
+    let mut tier_counts = empty_tier_counts();
+    let mut filtered: Vec<sow_data::PublicLeaderboardEntry> = Vec::new();
+    for entry in all {
+        if entry.games_played < min_games {
+            continue;
         }
-        Err(error) => {
-            error!("public leaderboard lookup failed: {error}");
-            (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(ErrorResponse {
-                    error: "leaderboard unavailable".to_string(),
-                }),
-            )
-                .into_response()
+        if !needle.is_empty()
+            && !entry.handle.to_lowercase().contains(&needle)
+            && !entry.account_id.to_lowercase().contains(&needle)
+        {
+            continue;
         }
+        if wanted_leader.is_some_and(|leader| {
+            !entry_matches_leader_filter(entry.preferred_leader.as_deref(), leader)
+        }) {
+            continue;
+        }
+        let tier_key = entry.tier.to_ascii_lowercase();
+        if let Some(count) = tier_counts.get_mut(&tier_key) {
+            *count += 1;
+        }
+        if wanted_tier.is_some_and(|wanted| !entry.tier.eq_ignore_ascii_case(wanted)) {
+            continue;
+        }
+        filtered.push(entry.clone());
     }
+    match sort {
+        "win_rate" => filtered.sort_by(|a, b| {
+            b.win_rate
+                .total_cmp(&a.win_rate)
+                .then_with(|| a.rank.cmp(&b.rank))
+        }),
+        "wins" => filtered.sort_by(|a, b| {
+            b.wins.cmp(&a.wins).then_with(|| a.rank.cmp(&b.rank))
+        }),
+        "peak" => filtered.sort_by(|a, b| {
+            b.peak_score
+                .cmp(&a.peak_score)
+                .then_with(|| a.rank.cmp(&b.rank))
+        }),
+        "games" => filtered.sort_by(|a, b| {
+            b.games_played
+                .cmp(&a.games_played)
+                .then_with(|| a.rank.cmp(&b.rank))
+        }),
+        _ => {}
+    }
+    let total_count = filtered.len();
+    let slice_end = cursor.saturating_add(limit).min(total_count);
+    let items = if cursor < total_count {
+        filtered[cursor..slice_end].to_vec()
+    } else {
+        Vec::new()
+    };
+    let next_cursor = (slice_end < total_count).then_some(slice_end);
+    (
+        StatusCode::OK,
+        [
+            (header::ETAG, etag),
+            (
+                header::CACHE_CONTROL,
+                "public, max-age=15, stale-while-revalidate=30".to_string(),
+            ),
+        ],
+        Json(serde_json::json!({
+            "season_id": season_id,
+            "queue": queue,
+            "mode": mode,
+            "metric": "ranked",
+            "items": items,
+            "next_cursor": next_cursor,
+            "total_count": total_count,
+            "tier_counts": tier_counts,
+            "updated_at": snapshot.updated_at,
+        })),
+    )
+        .into_response()
 }
 
+#[cfg(test)]
 fn leaderboard_next_cursor(cursor: usize, limit: usize, fetched: usize) -> Option<usize> {
     (fetched > limit).then(|| cursor.saturating_add(limit))
 }
@@ -2346,7 +2999,10 @@ mod leaderboard_pagination_tests {
 
 /// `host` is this deployment's public host (`sow_data::auth::public_host`), so PTR's pages are first-party too.
 fn is_first_party_analytics_origin(headers: &HeaderMap, host: &str) -> bool {
-    let Some(origin) = headers.get(header::ORIGIN).and_then(|value| value.to_str().ok()) else {
+    let Some(origin) = headers
+        .get(header::ORIGIN)
+        .and_then(|value| value.to_str().ok())
+    else {
         return false;
     };
     origin == format!("https://{host}") || origin == format!("https://www.{host}")
@@ -2375,9 +3031,16 @@ mod analytics_origin_tests {
             ("shadowsofwar.io", "null", false),
         ];
         for (host, origin, accepted) in cases {
-            assert_eq!(is_first_party_analytics_origin(&origin_header(origin), host), accepted, "{origin} on {host}");
+            assert_eq!(
+                is_first_party_analytics_origin(&origin_header(origin), host),
+                accepted,
+                "{origin} on {host}"
+            );
         }
-        assert!(!is_first_party_analytics_origin(&HeaderMap::new(), "shadowsofwar.io"));
+        assert!(!is_first_party_analytics_origin(
+            &HeaderMap::new(),
+            "shadowsofwar.io"
+        ));
     }
 }
 
@@ -3055,7 +3718,11 @@ async fn handle_claim_mission(
 
     match state
         .db
-        .claim_mission_reward(&account_id, payload.mission_id.trim(), payload.doubled_by_ad)
+        .claim_mission_reward(
+            &account_id,
+            payload.mission_id.trim(),
+            payload.doubled_by_ad,
+        )
         .await
     {
         Ok(account) => (StatusCode::OK, Json(account.without_auth_secret())).into_response(),
@@ -3531,15 +4198,21 @@ impl AppState {
                 let remaining_secs = (suspended_until - now).as_secs().max(1);
                 return Err((
                     StatusCode::FORBIDDEN,
-                    format!("Account temporarily suspended for repeated abuse; try again in {remaining_secs}s"),
+                    format!(
+                        "Account temporarily suspended for repeated abuse; try again in {remaining_secs}s"
+                    ),
                 ));
             } else {
                 entry.suspension_expires_at = None;
             }
         }
 
-        entry.request_timestamps.retain(|t| now.duration_since(*t) <= Duration::from_secs(300));
-        entry.tier2_offenses.retain(|t| now.duration_since(*t) <= Duration::from_secs(3 * 86400));
+        entry
+            .request_timestamps
+            .retain(|t| now.duration_since(*t) <= Duration::from_secs(300));
+        entry
+            .tier2_offenses
+            .retain(|t| now.duration_since(*t) <= Duration::from_secs(3 * 86400));
         entry.request_timestamps.push(now);
 
         let reqs_last_5m = entry.request_timestamps.len();
@@ -3550,7 +4223,8 @@ impl AppState {
                 entry.suspension_expires_at = Some(now + Duration::from_secs(3 * 86400));
                 return Err((
                     StatusCode::FORBIDDEN,
-                    "Account suspended for 3 days due to repeated rate limit violations".to_string(),
+                    "Account suspended for 3 days due to repeated rate limit violations"
+                        .to_string(),
                 ));
             }
             entry.block_expires_at = Some(now + Duration::from_secs(300));
@@ -3841,13 +4515,24 @@ async fn resolve_platform_account(
     };
 
     if provider == "sow" {
-        state.db.account_by_id(&resolved_external_id).await.map_err(|error| error.to_string())
-    } else if let Some(account) = state.db.get_existing_identity(provider.to_owned(), resolved_external_id.clone())
-        .await.map_err(|error| error.to_string())? {
+        state
+            .db
+            .account_by_id(&resolved_external_id)
+            .await
+            .map_err(|error| error.to_string())
+    } else if let Some(account) = state
+        .db
+        .get_existing_identity(provider.to_owned(), resolved_external_id.clone())
+        .await
+        .map_err(|error| error.to_string())?
+    {
         Ok(account)
     } else {
-        state.db.resolve_verified_identity(provider, "production", &resolved_external_id, None)
-            .await.map_err(|error| error.to_string())
+        state
+            .db
+            .resolve_verified_identity(provider, "production", &resolved_external_id, None)
+            .await
+            .map_err(|error| error.to_string())
     }
 }
 
@@ -3939,18 +4624,37 @@ async fn handle_release_work(
     Path(release_id): Path<String>,
 ) -> impl IntoResponse {
     if !verify_internal_auth(&headers, &state.secret_token) {
-        return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error":"Unauthorized"}))).into_response();
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({"error":"Unauthorized"})),
+        )
+            .into_response();
     }
-    if release_id.is_empty() || release_id.len() > 128
-        || !release_id.bytes().all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
+    if release_id.is_empty()
+        || release_id.len() > 128
+        || !release_id
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
     {
-        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error":"invalid release id"}))).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error":"invalid release id"})),
+        )
+            .into_response();
     }
     match state.db.outstanding_release_matches(&release_id) {
-        Ok(outstanding_matches) => (StatusCode::OK, Json(serde_json::json!({"outstanding_matches": outstanding_matches}))).into_response(),
+        Ok(outstanding_matches) => (
+            StatusCode::OK,
+            Json(serde_json::json!({"outstanding_matches": outstanding_matches})),
+        )
+            .into_response(),
         Err(error) => {
             error!("release work status unavailable for {release_id}: {error}");
-            (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error":"release work status unavailable"}))).into_response()
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(serde_json::json!({"error":"release work status unavailable"})),
+            )
+                .into_response()
         }
     }
 }
@@ -4055,8 +4759,7 @@ async fn reject_match_verification(
 /// POST /internal/bot-pool/seed — resolve or create persistent bot accounts
 /// for the given external_ids (provider="bot"). Idempotent: re-calling with
 /// the same external_ids returns the same account_ids in the same order.
-/// The display_name mapping is held by the caller; this endpoint only
-/// guarantees stable (external_id → account_id) linkage.
+/// The paired display_names are persisted on those accounts.
 async fn handle_bot_pool_seed(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -4073,7 +4776,11 @@ async fn handle_bot_pool_seed(
             .into_response();
     }
 
-    match state.db.seed_bot_pool(payload.external_ids).await {
+    match state
+        .db
+        .seed_bot_pool(payload.external_ids, payload.display_names)
+        .await
+    {
         Ok(account_ids) => {
             (StatusCode::OK, Json(BotPoolSeedResponse { account_ids })).into_response()
         }
@@ -4099,15 +4806,45 @@ struct RankedBotSeed {
 #[serde(tag = "action", rename_all = "snake_case")]
 enum RankedBotRequest {
     List,
-    Create { external_id: String, display_name: String, leader: String, iq: u32, actor: String },
-    Seed { bots: Vec<RankedBotSeed> },
-    Reserve { account_id: String, match_id: String },
-    Release { account_id: String, match_id: String },
-    Pause { account_id: String, actor: String },
-    Reactivate { account_id: String, actor: String },
-    SetIq { account_id: String, iq: u32, actor: String },
-    SetRating { account_id: String, score: u16, actor: String },
-    Recover { live_match_ids: Vec<String> },
+    Create {
+        external_id: String,
+        display_name: String,
+        leader: String,
+        iq: u32,
+        actor: String,
+    },
+    Seed {
+        bots: Vec<RankedBotSeed>,
+    },
+    Reserve {
+        account_id: String,
+        match_id: String,
+    },
+    Release {
+        account_id: String,
+        match_id: String,
+    },
+    Pause {
+        account_id: String,
+        actor: String,
+    },
+    Reactivate {
+        account_id: String,
+        actor: String,
+    },
+    SetIq {
+        account_id: String,
+        iq: u32,
+        actor: String,
+    },
+    SetRating {
+        account_id: String,
+        score: u16,
+        actor: String,
+    },
+    Recover {
+        live_match_ids: Vec<String>,
+    },
 }
 
 #[derive(serde::Deserialize)]
@@ -4121,13 +4858,25 @@ async fn handle_ranked_rating(
     Json(request): Json<RankedRatingRequest>,
 ) -> axum::response::Response {
     if !verify_internal_auth(&headers, &state.secret_token) {
-        return (StatusCode::UNAUTHORIZED, Json(ErrorResponse { error: "Unauthorized".into() })).into_response();
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "Unauthorized".into(),
+            }),
+        )
+            .into_response();
     }
     match state.db.ranked_rating(&request.account_id).await {
         Ok(rating) => (StatusCode::OK, Json(rating)).into_response(),
         Err(error) => {
             error!("ranked rating lookup failed: {error}");
-            (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "ranked rating unavailable".into() })).into_response()
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "ranked rating unavailable".into(),
+                }),
+            )
+                .into_response()
         }
     }
 }
@@ -4137,19 +4886,40 @@ async fn handle_available_ranked_bots(
     headers: HeaderMap,
 ) -> axum::response::Response {
     if !verify_internal_auth(&headers, &state.secret_token) {
-        return (StatusCode::UNAUTHORIZED, Json(ErrorResponse { error: "Unauthorized".into() })).into_response();
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "Unauthorized".into(),
+            }),
+        )
+            .into_response();
     }
     match state.db.available_ranked_bots().await {
         Ok(candidates) => {
-            let candidates = candidates.into_iter().map(|(account, rating)| serde_json::json!({
-                "account": account.without_auth_secret(),
-                "rating": rating,
-            })).collect::<Vec<_>>();
-            (StatusCode::OK, Json(serde_json::json!({ "candidates": candidates }))).into_response()
+            let candidates = candidates
+                .into_iter()
+                .map(|(account, rating)| {
+                    serde_json::json!({
+                        "account": account.without_auth_secret(),
+                        "rating": rating,
+                    })
+                })
+                .collect::<Vec<_>>();
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({ "candidates": candidates })),
+            )
+                .into_response()
         }
         Err(error) => {
             error!("ranked bot candidate lookup failed: {error}");
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: "ranked bot candidates unavailable".into() })).into_response()
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "ranked bot candidates unavailable".into(),
+                }),
+            )
+                .into_response()
         }
     }
 }
@@ -4160,7 +4930,13 @@ async fn handle_ranked_bot(
     Json(request): Json<RankedBotRequest>,
 ) -> axum::response::Response {
     if !verify_internal_auth(&headers, &state.secret_token) {
-        return (StatusCode::UNAUTHORIZED, Json(ErrorResponse { error: "Unauthorized".into() })).into_response();
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "Unauthorized".into(),
+            }),
+        )
+            .into_response();
     }
     let request = match request {
         RankedBotRequest::List => return match state.db.ranked_bots().await {
@@ -4182,32 +4958,107 @@ async fn handle_ranked_bot(
         request => request,
     };
     let result = match request {
-        RankedBotRequest::Create { external_id, display_name, leader, iq, actor } => state.db
-            .get_or_create_ranked_bot(&external_id, &display_name, &leader, iq, Some(&actor)).await.map(|account| vec![account]),
+        RankedBotRequest::Create {
+            external_id,
+            display_name,
+            leader,
+            iq,
+            actor,
+        } => state
+            .db
+            .get_or_create_ranked_bot(&external_id, &display_name, &leader, iq, Some(&actor))
+            .await
+            .map(|account| vec![account]),
         RankedBotRequest::Seed { bots } if bots.len() <= 64 => {
             let mut accounts = Vec::with_capacity(bots.len());
             let mut failure = None;
             for bot in bots {
-                match state.db.get_or_create_ranked_bot(&bot.external_id, &bot.display_name, &bot.leader, bot.iq, None).await {
+                match state
+                    .db
+                    .get_or_create_ranked_bot(
+                        &bot.external_id,
+                        &bot.display_name,
+                        &bot.leader,
+                        bot.iq,
+                        None,
+                    )
+                    .await
+                {
                     Ok(account) => accounts.push(account),
-                    Err(error) => { failure = Some(error); break; }
+                    Err(error) => {
+                        failure = Some(error);
+                        break;
+                    }
                 }
             }
-            match failure { Some(error) => Err(error), None => Ok(accounts) }
+            match failure {
+                Some(error) => Err(error),
+                None => Ok(accounts),
+            }
         }
         RankedBotRequest::Seed { .. } => Err("ranked bot seed exceeds 64 entries".into()),
-        RankedBotRequest::Reserve { account_id, match_id } => state.db
-            .reserve_ranked_bot(&account_id, &match_id).await.map(|account| account.into_iter().collect()),
-        RankedBotRequest::Release { account_id, match_id } => state.db
-            .release_ranked_bot(&account_id, &match_id).await.map(|()| Vec::new()),
-        RankedBotRequest::Pause { account_id, actor } => state.db
-            .update_ranked_bot(&account_id, sow_data::db::RankedBotManualUpdate::SetPaused { paused: true, actor }).await.map(|account| vec![account]),
-        RankedBotRequest::Reactivate { account_id, actor } => state.db
-            .update_ranked_bot(&account_id, sow_data::db::RankedBotManualUpdate::SetPaused { paused: false, actor }).await.map(|account| vec![account]),
-        RankedBotRequest::SetIq { account_id, iq, actor } => state.db
-            .update_ranked_bot(&account_id, sow_data::db::RankedBotManualUpdate::SetIq { iq, actor }).await.map(|account| vec![account]),
-        RankedBotRequest::SetRating { account_id, score, actor } => state.db
-            .update_ranked_bot(&account_id, sow_data::db::RankedBotManualUpdate::SetRating { score, actor }).await.map(|account| vec![account]),
+        RankedBotRequest::Reserve {
+            account_id,
+            match_id,
+        } => state
+            .db
+            .reserve_ranked_bot(&account_id, &match_id)
+            .await
+            .map(|account| account.into_iter().collect()),
+        RankedBotRequest::Release {
+            account_id,
+            match_id,
+        } => state
+            .db
+            .release_ranked_bot(&account_id, &match_id)
+            .await
+            .map(|()| Vec::new()),
+        RankedBotRequest::Pause { account_id, actor } => state
+            .db
+            .update_ranked_bot(
+                &account_id,
+                sow_data::db::RankedBotManualUpdate::SetPaused {
+                    paused: true,
+                    actor,
+                },
+            )
+            .await
+            .map(|account| vec![account]),
+        RankedBotRequest::Reactivate { account_id, actor } => state
+            .db
+            .update_ranked_bot(
+                &account_id,
+                sow_data::db::RankedBotManualUpdate::SetPaused {
+                    paused: false,
+                    actor,
+                },
+            )
+            .await
+            .map(|account| vec![account]),
+        RankedBotRequest::SetIq {
+            account_id,
+            iq,
+            actor,
+        } => state
+            .db
+            .update_ranked_bot(
+                &account_id,
+                sow_data::db::RankedBotManualUpdate::SetIq { iq, actor },
+            )
+            .await
+            .map(|account| vec![account]),
+        RankedBotRequest::SetRating {
+            account_id,
+            score,
+            actor,
+        } => state
+            .db
+            .update_ranked_bot(
+                &account_id,
+                sow_data::db::RankedBotManualUpdate::SetRating { score, actor },
+            )
+            .await
+            .map(|account| vec![account]),
         RankedBotRequest::List | RankedBotRequest::Recover { .. } => unreachable!("handled above"),
     };
     match result {
@@ -4288,13 +5139,16 @@ mod leader_rate_limit_tests {
             let t = base + Duration::from_millis(i * 100);
             assert!(AppState::eval_leader_rate_limit(&mut limits, "acc_1", t).is_ok());
         }
-        let res = AppState::eval_leader_rate_limit(&mut limits, "acc_1", base + Duration::from_secs(2));
+        let res =
+            AppState::eval_leader_rate_limit(&mut limits, "acc_1", base + Duration::from_secs(2));
         assert_eq!(res.unwrap_err().0, StatusCode::TOO_MANY_REQUESTS);
 
-        let res2 = AppState::eval_leader_rate_limit(&mut limits, "acc_1", base + Duration::from_secs(4));
+        let res2 =
+            AppState::eval_leader_rate_limit(&mut limits, "acc_1", base + Duration::from_secs(4));
         assert_eq!(res2.unwrap_err().0, StatusCode::TOO_MANY_REQUESTS);
 
-        let res3 = AppState::eval_leader_rate_limit(&mut limits, "acc_1", base + Duration::from_secs(65));
+        let res3 =
+            AppState::eval_leader_rate_limit(&mut limits, "acc_1", base + Duration::from_secs(65));
         assert!(res3.is_ok());
     }
 
@@ -4312,10 +5166,12 @@ mod leader_rate_limit_tests {
         assert_eq!(err.0, StatusCode::TOO_MANY_REQUESTS);
         assert!(err.1.contains("locked for 5 minutes"));
 
-        let res_during = AppState::eval_leader_rate_limit(&mut limits, "acc_2", t_61 + Duration::from_secs(100));
+        let res_during =
+            AppState::eval_leader_rate_limit(&mut limits, "acc_2", t_61 + Duration::from_secs(100));
         assert_eq!(res_during.unwrap_err().0, StatusCode::TOO_MANY_REQUESTS);
 
-        let res_after = AppState::eval_leader_rate_limit(&mut limits, "acc_2", t_61 + Duration::from_secs(305));
+        let res_after =
+            AppState::eval_leader_rate_limit(&mut limits, "acc_2", t_61 + Duration::from_secs(305));
         assert!(res_after.is_ok());
     }
 
@@ -4342,12 +5198,327 @@ mod leader_rate_limit_tests {
             let t = t_hour2 + Duration::from_millis(i * 10);
             let _ = AppState::eval_leader_rate_limit(&mut limits, "acc_3", t);
         }
-        let res_tier3 = AppState::eval_leader_rate_limit(&mut limits, "acc_3", t_hour2 + Duration::from_millis(610));
+        let res_tier3 = AppState::eval_leader_rate_limit(
+            &mut limits,
+            "acc_3",
+            t_hour2 + Duration::from_millis(610),
+        );
         let err = res_tier3.unwrap_err();
         assert_eq!(err.0, StatusCode::FORBIDDEN);
         assert!(err.1.contains("suspended for 3 days"));
 
-        let res_suspended = AppState::eval_leader_rate_limit(&mut limits, "acc_3", t_hour2 + Duration::from_secs(86400));
+        let res_suspended = AppState::eval_leader_rate_limit(
+            &mut limits,
+            "acc_3",
+            t_hour2 + Duration::from_secs(86400),
+        );
         assert_eq!(res_suspended.unwrap_err().0, StatusCode::FORBIDDEN);
+    }
+}
+
+#[cfg(test)]
+mod public_leaderboard_security_tests {
+    use super::*;
+    use axum::body::to_bytes;
+
+    fn test_state(temp: &tempfile::TempDir) -> Arc<AppState> {
+        let redb_path = temp.path().join("public-api-test.redb");
+        let redb = Arc::new(sow_data::init_database(&redb_path).unwrap());
+        let db = PlayerDb::new("redis://127.0.0.1:1/", None, Some(redb));
+        db.ensure_current_season().unwrap();
+        let auth = sow_data::auth::AuthService::new(
+            db.clone(),
+            "test-only-auth-secret-never-use-in-production".into(),
+        )
+        .unwrap();
+        let analytics_dir = temp.path().join("analytics");
+        std::fs::create_dir_all(&analytics_dir).unwrap();
+        let legacy_events = sow_data::events::EventSink::new(analytics_dir.to_str().unwrap()).unwrap();
+        let (replay_verification_tx, _rx) = tokio::sync::mpsc::channel(4);
+        let replay_verification_client = reqwest::Client::builder().no_proxy().build().unwrap();
+        Arc::new(AppState {
+            db,
+            auth,
+            secret_token: "test-secret".into(),
+            relay_settlement_secret: "relay-secret".into(),
+            revenuecat_webhook_secret: None,
+            redb_path: redb_path.to_string_lossy().into_owned(),
+            legacy_events: std::sync::Mutex::new(legacy_events),
+            playgames_handoffs: std::sync::Mutex::new(HashMap::new()),
+            playgames_sessions: std::sync::Mutex::new(HashMap::new()),
+            playgames_access_tokens: std::sync::Mutex::new(HashMap::new()),
+            replay_verification_tx,
+            replay_verification_client,
+            match_artifact_lock: tokio::sync::Mutex::new(()),
+            match_results: tokio::sync::broadcast::channel(8).0,
+            leader_rate_limits: std::sync::Mutex::new(HashMap::new()),
+            leaderboard_cache: tokio::sync::RwLock::new(HashMap::new()),
+            public_profile_cache: std::sync::Mutex::new(HashMap::new()),
+            public_api_rate_limits: std::sync::Mutex::new(HashMap::new()),
+        })
+    }
+
+    async fn read_json(response: axum::response::Response) -> (StatusCode, HeaderMap, serde_json::Value) {
+        let status = response.status();
+        let headers = response.headers().clone();
+        let bytes = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
+        let json = if bytes.is_empty() {
+            serde_json::Value::Null
+        } else {
+            serde_json::from_slice(&bytes).unwrap()
+        };
+        (status, headers, json)
+    }
+
+    #[test]
+    fn public_rate_limiter_enforces_limits_per_ip_and_recovers() {
+        let mut limits = HashMap::new();
+        let base = Instant::now();
+        for i in 0..25 {
+            assert!(eval_public_rate_limit(&mut limits, "search:1.2.3.4", 25, base + Duration::from_millis(i)).is_ok());
+        }
+        assert!(eval_public_rate_limit(&mut limits, "search:1.2.3.4", 25, base + Duration::from_secs(5)).is_err());
+        assert!(eval_public_rate_limit(&mut limits, "search:5.6.7.8", 25, base + Duration::from_secs(5)).is_ok());
+        assert!(eval_public_rate_limit(&mut limits, "search:1.2.3.4", 25, base + Duration::from_secs(62)).is_ok());
+    }
+
+    #[tokio::test]
+    async fn public_endpoints_validate_inputs_filter_cache_etag_and_hide_private_fields() {
+        let temp = tempfile::tempdir().unwrap();
+        let state = test_state(&temp);
+
+        let a1 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let a2 = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        let mut p1_profile = sow_data::PlayerProfile::default();
+        p1_profile.crowns = 9999;
+        p1_profile.gems = 888;
+        p1_profile.level = 12;
+        p1_profile.preferred_leader = Some("Caesar".into());
+        p1_profile.verified_wins = 15;
+        p1_profile.wins = 15;
+        p1_profile.matches_played = 20;
+        let p1 = sow_data::PlayerAccount {
+            id: a1.into(),
+            display_name: "Diogenes".into(),
+            profile: p1_profile,
+            linked_identities: vec![sow_data::LinkedIdentity {
+                provider: "email".into(),
+                external_id: "private@example.com".into(),
+                environment: "production".into(),
+            }],
+            kind: sow_data::db::AccountKind::Human,
+            auth_secret_hash: Some("top-secret-token-hash".into()),
+            created_at: 100,
+            updated_at: 100,
+        };
+
+        let mut p2_profile = sow_data::PlayerProfile::default();
+        p2_profile.level = 7;
+        p2_profile.preferred_leader = Some("Alexander".into());
+        p2_profile.verified_wins = 4;
+        p2_profile.wins = 4;
+        p2_profile.matches_played = 12;
+        let p2 = sow_data::PlayerAccount {
+            id: a2.into(),
+            display_name: "Alexander".into(),
+            profile: p2_profile,
+            linked_identities: Vec::new(),
+            kind: sow_data::db::AccountKind::Human,
+            auth_secret_hash: None,
+            created_at: 100,
+            updated_at: 100,
+        };
+
+        let redb = state.db.redb_db.as_ref().unwrap();
+        {
+            let txn = redb.begin_write().unwrap();
+            let mut r1 = sow_data::profile::initial_ranked_rating(a1.into(), 1400.0, 100);
+            r1.score = 9200;
+            r1.peak_score = 9400;
+            r1.games_played = 20;
+            r1.wins = 15;
+            r1.normalize_ladder();
+            let mut r2 = sow_data::profile::initial_ranked_rating(a2.into(), 1200.0, 100);
+            r2.score = 4500;
+            r2.peak_score = 4800;
+            r2.games_played = 12;
+            r2.wins = 4;
+            r2.normalize_ladder();
+            {
+                let mut players = txn.open_table(sow_data::redb_store::PLAYERS_TABLE).unwrap();
+                players.insert(p1.id.as_str(), serde_json::to_vec(&p1).unwrap().as_slice()).unwrap();
+                players.insert(p2.id.as_str(), serde_json::to_vec(&p2).unwrap().as_slice()).unwrap();
+            }
+            {
+                let mut profiles = txn.open_table(sow_data::redb_store::PUBLIC_PROFILES_TABLE).unwrap();
+                for (acc, score) in [(&p1, r1.score), (&p2, r2.score)] {
+                    let index = sow_data::PublicProfileIndex {
+                        account_id: acc.id.clone(),
+                        display_name: acc.display_name.clone(),
+                        kind: "human".into(),
+                        verified_wins: acc.profile.verified_wins,
+                        updated_at: acc.updated_at,
+                        level: acc.profile.level,
+                        matches_played: acc.profile.matches_played,
+                        preferred_leader: acc.profile.preferred_leader.clone(),
+                        ranked_1v1_score: score,
+                        ranked_ffa_score: 0,
+                    };
+                    profiles.insert(acc.id.as_str(), serde_json::to_vec(&index).unwrap().as_slice()).unwrap();
+                }
+            }
+            {
+                let mut ratings = txn.open_table(sow_data::redb_store::SEASON_RATINGS_TABLE).unwrap();
+                ratings.insert(format!("rating:{a1}:1:Ranked1v1:FFA").as_str(), serde_json::to_vec(&r1).unwrap().as_slice()).unwrap();
+                ratings.insert(format!("rating:{a2}:1:Ranked1v1:FFA").as_str(), serde_json::to_vec(&r2).unwrap().as_slice()).unwrap();
+            }
+            {
+                let mut board = txn.open_table(sow_data::redb_store::RANKED_LEADERBOARD_TABLE).unwrap();
+                for (acc, rating) in [(&p1, &r1), (&p2, &r2)] {
+                    let key = sow_data::redb_store::ranked_leaderboard_key(1, "Ranked1v1", "FFA", rating.score, rating.wins, &acc.id);
+                    let entry = sow_data::PublicLeaderboardEntry {
+                        rank: 0,
+                        account_id: acc.id.clone(),
+                        handle: sow_data::profile::public_handle(&acc.display_name, &acc.id),
+                        is_bot: false,
+                        queue: "Ranked1v1".into(),
+                        mode: "FFA".into(),
+                        score: rating.score,
+                        tier: rating.tier.clone(),
+                        division: rating.division.clone(),
+                        games_played: rating.games_played,
+                        wins: rating.wins,
+                        peak_score: rating.peak_score,
+                        win_rate: sow_data::profile::win_rate(rating.wins, rating.games_played),
+                        win_streak: 0,
+                        level: acc.profile.level,
+                        preferred_leader: acc.profile.preferred_leader.clone(),
+                        updated_at: rating.updated_at,
+                    };
+                    board.insert(key.as_str(), serde_json::to_vec(&entry).unwrap().as_slice()).unwrap();
+                }
+            }
+            txn.commit().unwrap();
+        }
+
+        // 1. Valid filtered query returns ETag, tier_counts, total_count, and matches filter.
+        let (status, headers, json) = read_json(
+            handle_public_leaderboard(
+                State(state.clone()),
+                HeaderMap::new(),
+                Path(1),
+                Query(PublicLeaderboardQuery {
+                    queue: Some("Ranked1v1".into()),
+                    tier: Some("deity".into()),
+                    leader: Some("caesar".into()),
+                    min_games: Some(15),
+                    ..Default::default()
+                }),
+            )
+            .await
+            .into_response(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(json["total_count"], 1);
+        assert_eq!(json["items"].as_array().unwrap().len(), 1);
+        assert_eq!(json["items"][0]["account_id"], a1);
+        assert_eq!(json["tier_counts"]["deity"], 1);
+        assert!(headers.contains_key(header::ETAG));
+        assert!(headers.contains_key(header::CACHE_CONTROL));
+
+        // 2. If-None-Match yields 304 Not Modified.
+        let etag = headers.get(header::ETAG).unwrap().clone();
+        let mut inm_headers = HeaderMap::new();
+        inm_headers.insert(header::IF_NONE_MATCH, etag);
+        let (inm_status, _, _) = read_json(
+            handle_public_leaderboard(
+                State(state.clone()),
+                inm_headers,
+                Path(1),
+                Query(PublicLeaderboardQuery {
+                    queue: Some("Ranked1v1".into()),
+                    tier: Some("deity".into()),
+                    leader: Some("caesar".into()),
+                    min_games: Some(15),
+                    ..Default::default()
+                }),
+            )
+            .await
+            .into_response(),
+        )
+        .await;
+        assert_eq!(inm_status, StatusCode::NOT_MODIFIED);
+
+        // 3. Invalid params return 400 Bad Request.
+        for bad_query in [
+            PublicLeaderboardQuery { queue: Some("InvalidQueue".into()), ..Default::default() },
+            PublicLeaderboardQuery { tier: Some("challenger".into()), ..Default::default() },
+            PublicLeaderboardQuery { sort: Some("drop_table".into()), ..Default::default() },
+            PublicLeaderboardQuery { leader: Some("nonexistent_hero".into()), ..Default::default() },
+            PublicLeaderboardQuery { q: Some("x".repeat(49)), ..Default::default() },
+        ] {
+            let (bad_status, _, _) = read_json(
+                handle_public_leaderboard(State(state.clone()), HeaderMap::new(), Path(1), Query(bad_query))
+                    .await
+                    .into_response(),
+            )
+            .await;
+            assert_eq!(bad_status, StatusCode::BAD_REQUEST);
+        }
+
+        // 4. Invalid account_id & match_id return 400 Bad Request.
+        let (bad_acc_status, _, _) = read_json(
+            handle_public_profile(State(state.clone()), HeaderMap::new(), Path("../etc/passwd".into()))
+                .await
+                .into_response(),
+        )
+        .await;
+        assert_eq!(bad_acc_status, StatusCode::BAD_REQUEST);
+
+        let (bad_match_status, _, _) = read_json(
+            handle_public_match_detail(State(state.clone()), HeaderMap::new(), Path("bad match!".into()))
+                .await
+                .into_response(),
+        )
+        .await;
+        assert_eq!(bad_match_status, StatusCode::BAD_REQUEST);
+
+        // 5. Public profile response strictly excludes secrets/balances/PII.
+        let (prof_status, _, prof_json) = read_json(
+            handle_public_profile(State(state.clone()), HeaderMap::new(), Path(a1.into()))
+                .await
+                .into_response(),
+        )
+        .await;
+        assert_eq!(prof_status, StatusCode::OK);
+        let raw_text = prof_json.to_string();
+        assert!(!raw_text.contains("top-secret-token"));
+        assert!(!raw_text.contains("private@example.com"));
+        assert!(prof_json.get("auth_secret").is_none());
+        assert!(prof_json.get("auth_secret_hash").is_none());
+        assert!(prof_json.get("linked_identities").is_none());
+        assert!(prof_json.get("crowns").is_none());
+        assert!(prof_json.get("gems").is_none());
+
+        // 6. /seasons/current/leaderboard alias resolves current season cleanly.
+        let (cur_status, _, cur_json) = read_json(
+            handle_current_season_leaderboard(
+                State(state.clone()),
+                HeaderMap::new(),
+                Query(PublicLeaderboardQuery {
+                    queue: Some("Ranked1v1".into()),
+                    limit: Some(10),
+                    ..Default::default()
+                }),
+            )
+            .await
+            .into_response(),
+        )
+        .await;
+        assert_eq!(cur_status, StatusCode::OK);
+        assert_eq!(cur_json["season_id"], sow_data::profile::CURRENT_SEASON_ID);
+        assert_eq!(cur_json["total_count"], 2);
+        assert_eq!(cur_json["items"][0]["account_id"], a1);
     }
 }

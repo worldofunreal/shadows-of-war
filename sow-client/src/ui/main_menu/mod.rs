@@ -47,6 +47,7 @@ pub struct MainMenuState {
     pub is_waiting: bool,
     pub wait_timer_secs: f32,
     pub ranked_search_active: bool,
+    pub ranked_ffa_search_active: bool,
     pub ranked_search_elapsed_secs: u32,
     pub ranked_matchup: Option<LobbyInfo>,
     pub server_address: String,
@@ -105,6 +106,7 @@ impl Default for MainMenuState {
             is_waiting: false,
             wait_timer_secs: 0.0,
             ranked_search_active: false,
+            ranked_ffa_search_active: false,
             ranked_search_elapsed_secs: 0,
             ranked_matchup: None,
             server_address: std::env::var("SOW_WS_URL")
@@ -224,4 +226,3 @@ impl MainMenuState {
         self.leader_selection_dirty
     }
 }
-

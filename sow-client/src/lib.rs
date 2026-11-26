@@ -250,6 +250,7 @@ pub(crate) fn building_sound_kind(
         sow_core::game::BuildingKind::TradingPost => crate::app::audio::BuildingSoundKind::TradingPost,
         sow_core::game::BuildingKind::Port => crate::app::audio::BuildingSoundKind::Port,
         sow_core::game::BuildingKind::MilitaryCamp => crate::app::audio::BuildingSoundKind::MilitaryCamp,
+        sow_core::game::BuildingKind::Farm => crate::app::audio::BuildingSoundKind::MilitaryCamp,
         sow_core::game::BuildingKind::SAM => crate::app::audio::BuildingSoundKind::SAM,
         sow_core::game::BuildingKind::MissileSilo => {
             crate::app::audio::BuildingSoundKind::MissileSilo

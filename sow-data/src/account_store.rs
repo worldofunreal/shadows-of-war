@@ -4,7 +4,8 @@ use super::{AccountKind, LinkedIdentity, PlayerAccount, PlayerDb};
 use crate::redb_store::{
     ACCOUNT_EVENTS_TABLE, ACCOUNT_IDENTITIES_TABLE,
     PENDING_ACCOUNT_REWARDS_TABLE, PENDING_CRAZYGAMES_SCORES_TABLE, PLAYERS_TABLE,
-    PUBLIC_PROFILES_TABLE, VERIFIED_VICTORY_BOARD_TABLE,
+    PUBLIC_PROFILES_TABLE, RANKED_LEADERBOARD_TABLE, SEASON_RATINGS_TABLE,
+    VERIFIED_VICTORY_BOARD_TABLE, ranked_leaderboard_key,
 };
 use redb::{ReadTransaction, ReadableTable, WriteTransaction};
 use serde::{Deserialize, Serialize};
@@ -203,6 +204,113 @@ fn load_write(txn: &WriteTransaction, account_id: &str, keys: &[&str]) -> Result
     Ok(account)
 }
 
+pub(crate) fn account_preferred_leader(account: &PlayerAccount) -> Option<String> {
+    account
+        .profile
+        .preferred_leader
+        .clone()
+        .or_else(|| account.profile.ranked_bot.as_ref().map(|bot| bot.leader.clone()))
+}
+
+fn ranked_entry_is_public(account: &PlayerAccount, rating: &crate::profile::SeasonRating) -> bool {
+    account.kind != AccountKind::Bot
+        || rating.queue == "RankedFFA"
+        || (rating.queue == "Ranked1v1" && account.profile.ranked_bot.is_some())
+}
+
+pub(crate) fn upsert_ranked_leaderboard_entry(
+    txn: &WriteTransaction,
+    previous: Option<(u16, u32)>,
+    rating: &crate::profile::SeasonRating,
+    account: &PlayerAccount,
+) -> Result<()> {
+    let mut board = txn.open_table(RANKED_LEADERBOARD_TABLE)?;
+    if let Some((old_score, old_wins)) = previous {
+        let old_key = ranked_leaderboard_key(
+            rating.season_id,
+            &rating.queue,
+            &rating.mode,
+            old_score,
+            old_wins,
+            &account.id,
+        );
+        board.remove(old_key.as_str())?;
+    }
+    if !ranked_entry_is_public(account, rating) {
+        return Ok(());
+    }
+    let key = ranked_leaderboard_key(
+        rating.season_id,
+        &rating.queue,
+        &rating.mode,
+        rating.score,
+        rating.wins,
+        &account.id,
+    );
+    let entry = crate::profile::PublicLeaderboardEntry {
+        rank: 0,
+        account_id: account.id.clone(),
+        handle: crate::profile::public_handle(&account.display_name, &account.id),
+        is_bot: false,
+        queue: rating.queue.clone(),
+        mode: rating.mode.clone(),
+        score: rating.score,
+        tier: rating.tier.clone(),
+        division: rating.division.clone(),
+        games_played: rating.games_played,
+        wins: rating.wins,
+        peak_score: rating.peak_score,
+        win_rate: crate::profile::win_rate(rating.wins, rating.games_played),
+        win_streak: rating.win_streak,
+        level: account.profile.level,
+        preferred_leader: account_preferred_leader(account),
+        updated_at: rating.updated_at,
+    };
+    board.insert(key.as_str(), serde_json::to_vec(&entry)?.as_slice())?;
+    Ok(())
+}
+
+pub(crate) fn remove_ranked_leaderboard_entries_for_account(
+    txn: &WriteTransaction,
+    account_id: &str,
+) -> Result<u32> {
+    let prefix = format!("rating:{account_id}:");
+    let upper = format!("{prefix}\u{10ffff}");
+    let ratings = {
+        let table = txn.open_table(SEASON_RATINGS_TABLE)?;
+        let mut items = Vec::new();
+        for row in table.range(prefix.as_str()..upper.as_str())? {
+            let (key, value) = row?;
+            let mut rating: crate::profile::SeasonRating = serde_json::from_slice(value.value())?;
+            rating.normalize_ladder();
+            items.push((key.value().to_string(), rating));
+        }
+        items
+    };
+    let mut removed = 0_u32;
+    if !ratings.is_empty() {
+        let mut board = txn.open_table(RANKED_LEADERBOARD_TABLE)?;
+        let mut ratings_table = txn.open_table(SEASON_RATINGS_TABLE)?;
+        for (rating_key, rating) in ratings {
+            let lb_key = ranked_leaderboard_key(
+                rating.season_id,
+                &rating.queue,
+                &rating.mode,
+                rating.score,
+                rating.wins,
+                &rating.account_id,
+            );
+            if board.remove(lb_key.as_str())?.is_some() {
+                removed = removed.saturating_add(1);
+            }
+            if ratings_table.remove(rating_key.as_str())?.is_some() {
+                removed = removed.saturating_add(1);
+            }
+        }
+    }
+    Ok(removed)
+}
+
 fn public_index(account: &PlayerAccount) -> Result<Vec<u8>> {
     Ok(serde_json::to_vec(&crate::profile::PublicProfileIndex {
         account_id: account.id.clone(),
@@ -210,6 +318,11 @@ fn public_index(account: &PlayerAccount) -> Result<Vec<u8>> {
         kind: format!("{:?}", account.kind),
         verified_wins: account.profile.verified_wins,
         updated_at: account.updated_at,
+        level: account.profile.level,
+        matches_played: account.profile.matches_played,
+        preferred_leader: account_preferred_leader(account),
+        ranked_1v1_score: 0,
+        ranked_ffa_score: 0,
     })?)
 }
 
@@ -274,26 +387,58 @@ fn save_indexes(
             table.remove(account.id.as_str())?;
         }
     }
-    let mut board = txn.open_table(VERIFIED_VICTORY_BOARD_TABLE)?;
-    if let Some(old) =
-        old.filter(|old| old.profile.verified_wins > 0 && old.kind != AccountKind::Bot)
     {
-        board
-            .remove(crate::db::verified_victory_key(old.profile.verified_wins, &old.id).as_str())?;
+        let mut board = txn.open_table(VERIFIED_VICTORY_BOARD_TABLE)?;
+        if let Some(old) =
+            old.filter(|old| old.profile.verified_wins > 0 && old.kind != AccountKind::Bot)
+        {
+            board.remove(
+                crate::db::verified_victory_key(old.profile.verified_wins, &old.id).as_str(),
+            )?;
+        }
+        if account.profile.verified_wins > 0 && account.kind != AccountKind::Bot {
+            let entry = crate::profile::PublicVictoryLeaderboardEntry {
+                rank: 0,
+                account_id: account.id.clone(),
+                handle: crate::profile::public_handle(&account.display_name, &account.id),
+                level: account.profile.level,
+                matches_played: account.profile.matches_played,
+                wins: account.profile.verified_wins,
+                preferred_leader: account_preferred_leader(account),
+                win_rate: crate::profile::win_rate(
+                    account.profile.verified_wins,
+                    account.profile.matches_played,
+                ),
+            };
+            board.insert(
+                crate::db::verified_victory_key(account.profile.verified_wins, &account.id)
+                    .as_str(),
+                serde_json::to_vec(&entry)?.as_slice(),
+            )?;
+        }
     }
-    if account.profile.verified_wins > 0 && account.kind != AccountKind::Bot {
-        let entry = crate::profile::PublicVictoryLeaderboardEntry {
-            rank: 0,
-            account_id: account.id.clone(),
-            handle: crate::profile::public_handle(&account.display_name, &account.id),
-            level: account.profile.level,
-            matches_played: account.profile.matches_played,
-            wins: account.profile.verified_wins,
+    if old.is_some_and(|prev| {
+        prev.display_name != account.display_name
+            || account_preferred_leader(prev) != account_preferred_leader(account)
+            || prev.profile.level != account.profile.level
+    }) {
+        let prefix = format!("rating:{}:", account.id);
+        let upper = format!("{prefix}\u{10ffff}");
+        let ratings = {
+            let table = txn.open_table(SEASON_RATINGS_TABLE)?;
+            let mut items = Vec::new();
+            for row in table.range(prefix.as_str()..upper.as_str())? {
+                let (_, value) = row?;
+                let mut rating: crate::profile::SeasonRating =
+                    serde_json::from_slice(value.value())?;
+                rating.normalize_ladder();
+                items.push(rating);
+            }
+            items
         };
-        board.insert(
-            crate::db::verified_victory_key(account.profile.verified_wins, &account.id).as_str(),
-            serde_json::to_vec(&entry)?.as_slice(),
-        )?;
+        for rating in ratings {
+            upsert_ranked_leaderboard_entry(txn, None, &rating, account)?;
+        }
     }
     Ok(())
 }
@@ -445,6 +590,7 @@ pub(super) fn delete_account_rows(txn: &WriteTransaction, account_id: &str) -> R
         }
     }
 
+    removed = removed.saturating_add(remove_ranked_leaderboard_entries_for_account(txn, account_id)?);
     removed = removed.saturating_add(delete_events_for_account(txn, account_id)?);
     removed = removed.saturating_add(crate::auth::delete_account_sessions(txn, account_id)?);
     if txn.open_table(PLAYERS_TABLE)?.remove(account_id)?.is_some() {
@@ -599,6 +745,7 @@ impl PlayerDb {
         let commit_started = std::time::Instant::now();
         txn.commit()?;
         let commit_elapsed = commit_started.elapsed();
+        self.bump_leaderboard_epoch();
         log::info!(
             "[rewards-timing] redb_batch accounts={} write_wait_ms={} prepare_ms={} commit_ms={}",
             accounts.len(),
@@ -655,6 +802,9 @@ impl PlayerDb {
             save_account(&txn, Some(&before), &account, false)?;
         }
         txn.commit()?;
+        if changed {
+            self.bump_leaderboard_epoch();
+        }
         Ok(account)
     }
 
@@ -811,6 +961,9 @@ impl PlayerDb {
         let txn = db.begin_write()?;
         let (found, removed) = delete_account_rows(&txn, account_id)?;
         txn.commit()?;
+        if found || removed > 0 {
+            self.bump_leaderboard_epoch();
+        }
         Ok((found, removed))
     }
 

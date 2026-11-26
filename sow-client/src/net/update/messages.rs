@@ -111,9 +111,15 @@ impl SowApp {
                     ServerMessage::Start(start_msg) => {
                         if !start_msg.config.ranked_1v1 {
                             self.ui.app.main_menu_state.ranked_matchup = None;
-                        } else if let Some(matchup) = self.ui.app.main_menu_state.ranked_matchup.as_mut() {
+                        } else if let Some(matchup) =
+                            self.ui.app.main_menu_state.ranked_matchup.as_mut()
+                        {
                             for player in &mut matchup.players {
-                                if let Some(confirmed) = start_msg.players.iter().find(|item| item.id == player.player_id) {
+                                if let Some(confirmed) = start_msg
+                                    .players
+                                    .iter()
+                                    .find(|item| item.id == player.player_id)
+                                {
                                     player.name = confirmed.name.clone();
                                     player.leader = Some(confirmed.leader);
                                 }
@@ -324,6 +330,7 @@ impl SowApp {
                     ServerMessage::RankedSearching { elapsed_secs } => {
                         self.ui.app.main_menu_state.ranked_matchup = None;
                         self.ui.app.main_menu_state.ranked_search_active = true;
+                        self.ui.app.main_menu_state.ranked_ffa_search_active = false;
                         self.ui.app.main_menu_state.ranked_search_elapsed_secs = elapsed_secs;
                     }
                     ServerMessage::ServerOwner {
@@ -367,6 +374,7 @@ impl SowApp {
                             menu.is_lobby_host = false;
                             menu.my_player_id = None;
                             menu.ranked_search_active = false;
+                            menu.ranked_ffa_search_active = false;
                             menu.ranked_search_elapsed_secs = 0;
                             menu.is_waiting = false;
                             self.ui.app.phase = ClientPhase::MainMenu;
@@ -384,6 +392,7 @@ impl SowApp {
                             menu.is_lobby_host = false;
                             menu.my_player_id = None;
                             menu.ranked_search_active = true;
+                            menu.ranked_ffa_search_active = false;
                             menu.ranked_search_elapsed_secs = 0;
                             menu.is_waiting = true;
                             self.ui.app.phase = ClientPhase::MainMenu;
@@ -437,7 +446,9 @@ impl SowApp {
                     }
                     ServerMessage::JoinFailed(fail) => {
                         if fail.reason == "SERVER_DRAINING" {
-                            log::info!("[LOBBY] Owner generation drained; retrying the request at the active server");
+                            log::info!(
+                                "[LOBBY] Owner generation drained; retrying the request at the active server"
+                            );
                             self.net.ws_url = self.net.orchestrator_url.clone();
                             self.ui.app.main_menu_state.server_address = self.net.ws_url.clone();
                             self.ui.app.main_menu_state.is_connected = false;
@@ -489,10 +500,12 @@ impl SowApp {
                         }
                         self.join_matchmaking = false;
                         self.join_public_matchmaking = false;
+                        self.join_ranked_ffa = false;
                         self.join_waiting_for_identity = false;
                         let menu = &mut self.ui.app.main_menu_state;
                         menu.is_waiting = false;
                         menu.ranked_search_active = false;
+                        menu.ranked_ffa_search_active = false;
                         menu.ranked_search_elapsed_secs = 0;
                         menu.pending_join_lobby_id = None;
                         menu.joined_lobby_id = None;
@@ -525,18 +538,22 @@ impl SowApp {
                     }
                     ServerMessage::JoinAck(ack) => {
                         self.ui.app.main_menu_state.ranked_search_active = false;
+                        self.ui.app.main_menu_state.ranked_ffa_search_active = false;
                         self.ui.app.main_menu_state.ranked_search_elapsed_secs = 0;
-                        let wait_bucket = crate::store_portals::wait_bucket(
-                            self.portal_join_started_at.take(),
-                        );
+                        let wait_bucket =
+                            crate::store_portals::wait_bucket(self.portal_join_started_at.take());
                         let mode = self.portal_match_mode;
-                        if self.join_matchmaking || self.join_public_matchmaking {
+                        if self.join_matchmaking
+                            || self.join_public_matchmaking
+                            || self.join_ranked_ffa
+                        {
                             crate::store_portals::track_product_event_with(
                                 "matchmaking_joined",
                                 &serde_json::json!({ "mode": mode, "wait_bucket": wait_bucket }),
                             );
                         }
                         self.join_public_matchmaking = false;
+                        self.join_ranked_ffa = false;
                         crate::store_portals::track_product_event_with(
                             "lobby_joined",
                             &serde_json::json!({ "mode": mode, "wait_bucket": wait_bucket }),

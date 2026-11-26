@@ -393,6 +393,14 @@ impl SowApp {
                     .play_cascade(now, step, self.spatial_sound_params(wx, wy));
             }
 
+            if self.ui.blast_scene.has_pending_nuked_fleets() {
+                self.ui.blast_scene.register_dying_ships(
+                    &existing.fleets,
+                    &snap.players,
+                    self.sim.map_w,
+                );
+            }
+
             if !old_buildings.is_empty()
                 && (self.ui.blast_scene.has_recent_detonations() || allow_demolition_vfx)
             {
@@ -435,6 +443,7 @@ impl SowApp {
                 snap.dirty_tiles = existing.dirty_tiles;
             }
         }
+        self.ui.blast_scene.clear_pending_nuked_fleets();
         let team_betrayal_enabled = self.sim.config.game_mode == "Teams"
             && self
                 .sim

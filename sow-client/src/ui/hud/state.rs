@@ -38,6 +38,7 @@ pub struct BuildingPlacement {
     pub kind: sow_core::game::BuildingKind,
     pub tile_idx: u32,
     pub pending: bool,
+    pub city_id: Option<u64>,
 }
 
 pub(crate) const DEFAULT_ATTACK_RATIO: f32 = 0.25;
@@ -78,7 +79,7 @@ pub struct HudState {
     pub betrayal_warning_cached: Option<(u16, sow_core::protocol::GameplayIntent)>,
     pub building_placement: Option<BuildingPlacement>,
     pub building_costs: [f64; 9],
-    pub building_foundation_levels: [u8; 7],
+    pub building_foundation_levels: [u8; sow_core::game::BUILDING_KIND_COUNT],
     pub selected_nuke_kind: Option<sow_core::game::NukeKind>,
     pub selected_warship_ids: Vec<u64>,
     pub warship_move_targeting: bool,
@@ -116,7 +117,7 @@ impl Default for HudState {
             betrayal_warning_cached: None,
             building_placement: None,
             building_costs: [0.0; 9],
-            building_foundation_levels: [1; 7],
+            building_foundation_levels: [1; sow_core::game::BUILDING_KIND_COUNT],
             selected_nuke_kind: None,
             selected_warship_ids: Vec::new(),
             warship_move_targeting: false,

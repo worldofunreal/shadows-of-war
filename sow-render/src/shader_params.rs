@@ -552,6 +552,29 @@ pub static PARAMS: &[ParamDef] = &[
         [71.0 / 255.0, 133.0 / 255.0, 181.0 / 255.0],
         "MAP_WATER_SHALLOW"
     ),
+    // Animated procedural waves + sun glint on ocean water (render-only).
+    number!(
+        "water.wave_strength",
+        "Wave strength",
+        "Ocean water",
+        0.16,
+        0.0,
+        0.6,
+        0.01,
+        "×",
+        "MAP_WATER_WAVE_STRENGTH"
+    ),
+    number!(
+        "water.wave_scale",
+        "Wave scale",
+        "Ocean water",
+        2.2,
+        0.5,
+        8.0,
+        0.1,
+        "cycles/tile",
+        "MAP_WATER_WAVE_SCALE"
+    ),
     color!(
         "water.inland.color",
         "Lakes and rivers",
@@ -667,6 +690,52 @@ pub static PARAMS: &[ParamDef] = &[
         "Terrain",
         1.0,
         "MAP_PETEN_CANOPY"
+    ),
+    // Procedural biome detail (render-only): sub-tile texture + climate variation
+    // derived from a moisture noise field, elevation and latitude-ish cold. No
+    // per-tile biome data is read; everything is generated in the fragment shader.
+    flag!(
+        "land.biome_detail",
+        "Biome detail (procedural)",
+        "Terrain",
+        1.0,
+        "MAP_BIOME_DETAIL"
+    ),
+    number!(
+        "land.biome_scale",
+        "Biome texture scale",
+        "Terrain",
+        3.0,
+        0.5,
+        12.0,
+        0.1,
+        "cycles/tile",
+        "MAP_BIOME_SCALE"
+    ),
+    number!(
+        "land.biome_strength",
+        "Biome texture strength",
+        "Terrain",
+        0.35,
+        0.0,
+        1.0,
+        0.01,
+        "×",
+        "MAP_BIOME_STRENGTH"
+    ),
+    color!(
+        "land.vegetation.color",
+        "Vegetation tint",
+        "Terrain",
+        [0.45, 0.72, 0.38],
+        "MAP_VEGETATION_TINT"
+    ),
+    color!(
+        "land.arid.color",
+        "Arid / desert tint",
+        "Terrain",
+        [0.82, 0.72, 0.50],
+        "MAP_ARID_TINT"
     ),
     color!(
         "land.highlands.color",
@@ -1337,6 +1406,17 @@ pub static PARAMS: &[ParamDef] = &[
         0.1,
         "px/tile",
         "LOD_BUILDING_DOT_ZOOM"
+    ),
+    number!(
+        "lod.building.district_zoom",
+        "Districts appear above zoom",
+        "Zoom LOD",
+        5.5,
+        0.0,
+        20.0,
+        0.25,
+        "px/tile",
+        "LOD_BUILDING_DISTRICT_ZOOM"
     ),
     number!(
         "lod.building.icon_px",

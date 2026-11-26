@@ -1,7 +1,11 @@
 use crate::app::{InputState, SimState, UiState};
 use crate::render::gpu::TextRenderer;
 use crate::theme::dev_config::DevConfig;
-use sow_core::building::{RailwayLink, RailwayTrack, expand_path};
+use sow_core::building::{
+    AStarScratch, RailPlacementPreview, RailwayLink, RailwayTrack, compress_path, expand_path,
+    index_tracks, preview_building_rail_connection,
+};
+use sow_core::game::BuildingKind;
 use sow_core::protocol::SimSnapshot;
 use std::collections::HashMap;
 use web_time::Instant;
@@ -11,6 +15,7 @@ const TRACK_BED_COLOR: [f32; 3] = [0.12, 0.11, 0.10];
 const TRACK_RAIL_COLOR: [f32; 3] = [0.63, 0.54, 0.40];
 
 struct RailSegment {
+    key: (u64, u64),
     points: Vec<[f32; 2]>,
     path_tiles: Vec<u32>,
     level: u8,
@@ -31,6 +36,9 @@ pub(crate) struct RailwayRenderState {
     snapshot_tick: Option<u64>,
     railway_links: std::sync::Arc<Vec<RailwayLink>>,
     railway_tracks: std::sync::Arc<Vec<RailwayTrack>>,
+    track_index_by_key: HashMap<(u64, u64), usize>,
+    track_index_by_tile: HashMap<u32, Vec<(u64, u64)>>,
+    routes_by_track_key: HashMap<(u64, u64), Vec<usize>>,
     segments: Vec<RailSegment>,
     train_routes: Vec<RailTrainRoute>,
     cells: HashMap<(i32, i32), Vec<usize>>,
@@ -39,6 +47,12 @@ pub(crate) struct RailwayRenderState {
     train_seen: Vec<u64>,
     fog_of_war: bool,
     frame: u64,
+    station_tiles: Vec<(u64, u32)>,
+    preview_astar: AStarScratch,
+    cached_preview_key: Option<(BuildingKind, u32, usize, usize)>,
+    cached_preview: RailPlacementPreview,
+    cached_ghost_points: Vec<Vec<[f32; 2]>>,
+    pub(crate) hovered_segment: Option<usize>,
 }
 
 impl RailwayRenderState {
@@ -56,84 +70,107 @@ impl RailwayRenderState {
         }
         self.snapshot_tick = Some(snapshot.tick);
 
-        if std::sync::Arc::ptr_eq(&self.railway_links, &snapshot.railway_links)
-            && std::sync::Arc::ptr_eq(&self.railway_tracks, &snapshot.railway_tracks)
-            && self.fog_of_war == fog_of_war
-        {
+        let fog_changed = self.fog_of_war != fog_of_war;
+        let tracks_dirty =
+            fog_changed || !std::sync::Arc::ptr_eq(&self.railway_tracks, &snapshot.railway_tracks);
+        let links_dirty =
+            fog_changed || !std::sync::Arc::ptr_eq(&self.railway_links, &snapshot.railway_links);
+        if !tracks_dirty && !links_dirty {
             return;
         }
-        self.railway_links.clone_from(&snapshot.railway_links);
-        self.railway_tracks.clone_from(&snapshot.railway_tracks);
-        self.segments.clear();
-        self.train_routes.clear();
-        self.cells.clear();
-        self.train_cells.clear();
         self.fog_of_war = fog_of_war;
-        let mut track_levels = HashMap::<(u64, u64), u8>::new();
-        for route in snapshot.railway_links.iter() {
-            for pair in route.station_path.windows(2) {
-                track_levels
-                    .entry(track_key(pair[0], pair[1]))
-                    .and_modify(|level| *level = (*level).max(route.level))
-                    .or_insert(route.level);
+
+        if tracks_dirty {
+            self.railway_tracks.clone_from(&snapshot.railway_tracks);
+            self.segments.clear();
+            self.cells.clear();
+            self.track_index_by_key.clear();
+            self.track_index_by_tile = index_tracks(&snapshot.railway_tracks, map_w);
+            self.cached_preview_key = None;
+            self.hovered_segment = None;
+            for track in snapshot.railway_tracks.iter() {
+                let path_tiles = if fog_of_war {
+                    expand_path(&track.path, map_w)
+                } else {
+                    Vec::new()
+                };
+                let points: Vec<_> = track
+                    .path
+                    .iter()
+                    .map(|&tile| world_point(tile, map_w))
+                    .collect();
+                if points.len() < 2 {
+                    continue;
+                }
+                let index = self.segments.len();
+                let key = track_key(track.from_node_id, track.to_node_id);
+                assign_chunks(&mut self.cells, index, &track.path, map_w);
+                self.track_index_by_key.insert(key, index);
+                self.segments.push(RailSegment {
+                    key,
+                    points,
+                    path_tiles,
+                    level: 1,
+                });
+            }
+            self.seen.resize(self.segments.len(), 0);
+        }
+
+        if tracks_dirty || links_dirty {
+            self.railway_links.clone_from(&snapshot.railway_links);
+            for segment in &mut self.segments {
+                segment.level = 1;
+            }
+            for route in snapshot.railway_links.iter() {
+                for pair in route.station_path.windows(2) {
+                    if let Some(&seg_idx) = self.track_index_by_key.get(&track_key(pair[0], pair[1]))
+                    {
+                        let level = &mut self.segments[seg_idx].level;
+                        *level = (*level).max(route.level);
+                    }
+                }
             }
         }
-        for track in snapshot.railway_tracks.iter() {
-            let path_tiles = if fog_of_war {
-                expand_path(&track.path, map_w)
-            } else {
-                Vec::new()
-            };
-            let points: Vec<_> = track
-                .path
-                .iter()
-                .map(|&tile| world_point(tile, map_w))
-                .collect();
-            if points.len() < 2 {
-                continue;
+
+        if links_dirty {
+            self.train_routes.clear();
+            self.train_cells.clear();
+            self.routes_by_track_key.clear();
+            for link in snapshot.railway_links.iter() {
+                if link.period_ticks == 0 {
+                    continue;
+                }
+                let points: Vec<_> = link
+                    .route_path
+                    .iter()
+                    .map(|&tile| world_point(tile, map_w))
+                    .collect();
+                if points.len() < 2 {
+                    continue;
+                }
+                let path_tiles = if fog_of_war {
+                    expand_path(&link.route_path, map_w)
+                } else {
+                    Vec::new()
+                };
+                let index = self.train_routes.len();
+                assign_chunks(&mut self.train_cells, index, &link.route_path, map_w);
+                for pair in link.station_path.windows(2) {
+                    let key = track_key(pair[0], pair[1]);
+                    self.routes_by_track_key.entry(key).or_default().push(index);
+                }
+                self.train_routes.push(RailTrainRoute {
+                    length: polyline_length(&points),
+                    points,
+                    path_tiles,
+                    owner_id: link.owner_id,
+                    level: link.level,
+                    period_ticks: link.period_ticks,
+                    opened_at: link.opened_at,
+                });
             }
-            let index = self.segments.len();
-            assign_chunks(&mut self.cells, index, &track.path, map_w);
-            self.segments.push(RailSegment {
-                points,
-                path_tiles,
-                level: track_levels
-                    .get(&track_key(track.from_node_id, track.to_node_id))
-                    .copied()
-                    .unwrap_or(1),
-            });
+            self.train_seen.resize(self.train_routes.len(), 0);
         }
-        for link in snapshot.railway_links.iter() {
-            if link.period_ticks == 0 {
-                continue;
-            }
-            let points: Vec<_> = link
-                .route_path
-                .iter()
-                .map(|&tile| world_point(tile, map_w))
-                .collect();
-            if points.len() < 2 {
-                continue;
-            }
-            let path_tiles = if fog_of_war {
-                expand_path(&link.route_path, map_w)
-            } else {
-                Vec::new()
-            };
-            let index = self.train_routes.len();
-            assign_chunks(&mut self.train_cells, index, &link.route_path, map_w);
-            self.train_routes.push(RailTrainRoute {
-                length: polyline_length(&points),
-                points,
-                path_tiles,
-                owner_id: link.owner_id,
-                level: link.level,
-                period_ticks: link.period_ticks,
-                opened_at: link.opened_at,
-            });
-        }
-        self.seen.resize(self.segments.len(), 0);
-        self.train_seen.resize(self.train_routes.len(), 0);
     }
 }
 
@@ -165,17 +202,13 @@ fn assign_chunks(
     }
     let mut chunks = Vec::new();
     for pair in tiles.windows(2) {
-        let (mut x, mut y) = ((pair[0] % map_w) as i32, (pair[0] / map_w) as i32);
-        let (end_x, end_y) = ((pair[1] % map_w) as i32, (pair[1] / map_w) as i32);
-        loop {
-            chunks.push((x.div_euclid(CHUNK), y.div_euclid(CHUNK)));
-            if x == end_x && y == end_y {
-                break;
-            }
-            if x != end_x {
-                x += (end_x - x).signum();
-            } else {
-                y += (end_y - y).signum();
+        let (x0, y0) = ((pair[0] % map_w) as i32, (pair[0] / map_w) as i32);
+        let (x1, y1) = ((pair[1] % map_w) as i32, (pair[1] / map_w) as i32);
+        let (cx0, cy0) = (x0.div_euclid(CHUNK), y0.div_euclid(CHUNK));
+        let (cx1, cy1) = (x1.div_euclid(CHUNK), y1.div_euclid(CHUNK));
+        for cy in cy0.min(cy1)..=cy0.max(cy1) {
+            for cx in cx0.min(cx1)..=cx0.max(cx1) {
+                chunks.push((cx, cy));
             }
         }
     }
@@ -205,11 +238,18 @@ pub(crate) fn render(
 ) {
     let state = &mut ui.railway_render_state;
     let min_zoom = dev.railway_min_zoom.max(0.01);
-    if !dev.vfx_railways || zoom_scaled < min_zoom || sim.map_w == 0 || sim.map_h == 0 {
+    if !dev.vfx_railways || sim.map_w == 0 || sim.map_h == 0 {
+        state.hovered_segment = None;
         return;
     }
     state.sync(snapshot, sim.map_w, dev.fog_of_war);
-    if state.segments.is_empty() && state.train_routes.is_empty() {
+    let placement = ui.app.hud_state.building_placement.filter(|p| !p.pending);
+    if zoom_scaled < min_zoom && placement.is_none() {
+        state.hovered_segment = None;
+        return;
+    }
+    if state.segments.is_empty() && state.train_routes.is_empty() && placement.is_none() {
+        state.hovered_segment = None;
         return;
     }
     state.frame = state.frame.wrapping_add(1).max(1);
@@ -241,46 +281,102 @@ pub(crate) fn render(
         * ((zoom_scaled - min_zoom) / min_zoom).clamp(0.25, 1.0);
     let base_vehicle_size =
         dev.train_size.clamp(3.0, 24.0) * sf.max(0.01) * (zoom_scaled * 0.16).clamp(0.9, 1.45);
-    for y in bound(1, true, sim.map_h)..=bound(1, false, sim.map_h) {
-        for x in bound(0, true, sim.map_w)..=bound(0, false, sim.map_w) {
-            let Some(indices) = state.cells.get(&(x, y)) else {
-                continue;
-            };
-            for &index in indices {
-                if state.seen[index] == state.frame {
+    if zoom_scaled >= min_zoom {
+        for y in bound(1, true, sim.map_h)..=bound(1, false, sim.map_h) {
+            for x in bound(0, true, sim.map_w)..=bound(0, false, sim.map_w) {
+                let Some(indices) = state.cells.get(&(x, y)) else {
                     continue;
-                }
-                state.seen[index] = state.frame;
-                let segment = &state.segments[index];
-                if dev.fog_of_war
-                    && !segment
-                        .path_tiles
-                        .iter()
-                        .all(|&tile| sim.fog_visible.contains(tile))
-                {
-                    continue;
-                }
-                for pair in segment.points.windows(2) {
-                    let a = input.world_to_screen(pair[0]);
-                    let b = input.world_to_screen(pair[1]);
-                    if route_in_view(a, a, b, screen_w, screen_h, width * 2.0) {
-                        draw_track_leg(
-                            text,
-                            a,
-                            b,
-                            width,
-                            opacity,
-                            segment.level,
-                            zoom_scaled,
-                            [screen_w, screen_h],
-                            snapshot.tick,
-                        );
+                };
+                for &index in indices {
+                    if state.seen[index] == state.frame {
+                        continue;
+                    }
+                    state.seen[index] = state.frame;
+                    let segment = &state.segments[index];
+                    if dev.fog_of_war
+                        && !segment
+                            .path_tiles
+                            .iter()
+                            .all(|&tile| sim.fog_visible.contains(tile))
+                    {
+                        continue;
+                    }
+                    for pair in segment.points.windows(2) {
+                        let a = input.world_to_screen(pair[0]);
+                        let b = input.world_to_screen(pair[1]);
+                        if route_in_view(a, a, b, screen_w, screen_h, width * 2.0) {
+                            draw_track_leg(
+                                text,
+                                a,
+                                b,
+                                width,
+                                opacity,
+                                segment.level,
+                                zoom_scaled,
+                                [screen_w, screen_h],
+                                snapshot.tick,
+                            );
+                        }
                     }
                 }
             }
         }
     }
-    if vehicle_limit == 0 {
+
+    if let Some(placement) = placement {
+        state.hovered_segment = None;
+        render_placement_rail_highlight(
+            text,
+            state,
+            snapshot,
+            sim,
+            input,
+            placement.kind,
+            placement.tile_idx,
+            width,
+            sf,
+            [screen_w, screen_h],
+        );
+    } else if zoom_scaled >= min_zoom {
+        let desktop_hover = crate::web_canvas::supports_desktop_hover()
+            && matches!(input.hover_pointer, crate::app::HoverPointer::Mouse)
+            && !input.is_pointer_gesture_active()
+            && !input.dragging
+            && input.building_drag.is_none()
+            && ui.hovered_building.is_none()
+            && input.camera_zoom > 0.0
+            && input.last_mouse_x >= 0.0
+            && input.last_mouse_y >= 0.0;
+        if desktop_hover {
+            let pointer_world =
+                input.screen_to_world([input.last_mouse_x as f32, input.last_mouse_y as f32]);
+            let max_world_dist = (10.0 * sf / input.camera_zoom).clamp(0.45, 2.2);
+            state.hovered_segment = pick_hovered_rail_segment(
+                state,
+                pointer_world,
+                max_world_dist,
+                dev.fog_of_war.then_some(&sim.fog_visible),
+            );
+            if let Some(seg_idx) = state.hovered_segment {
+                render_hover_rail_highlight(
+                    text,
+                    state,
+                    seg_idx,
+                    sim,
+                    input,
+                    dev.fog_of_war,
+                    width,
+                    [screen_w, screen_h],
+                );
+            }
+        } else {
+            state.hovered_segment = None;
+        }
+    } else {
+        state.hovered_segment = None;
+    }
+
+    if vehicle_limit == 0 || zoom_scaled < min_zoom {
         return;
     }
     let mut vehicles = 0;
@@ -320,7 +416,8 @@ pub(crate) fn render(
                         _ => &[0.0, 1.05, 2.10, 3.15],
                     };
                     for (car_index, &gap) in gaps.iter().enumerate() {
-                        let (position, dir, loaded) = train_position(&route.points, phase, gap);
+                        let (position, dir, loaded) =
+                            train_position(&route.points, route.length, phase, gap);
                         draw_train_car(
                             text,
                             input.world_to_screen(position),
@@ -335,7 +432,8 @@ pub(crate) fn render(
                         );
                     }
                 } else {
-                    let (position, dir, loaded) = train_position(&route.points, phase, 0.0);
+                    let (position, dir, loaded) =
+                        train_position(&route.points, route.length, phase, 0.0);
                     draw_trade_cart(
                         text,
                         input.world_to_screen(position),
@@ -352,6 +450,267 @@ pub(crate) fn render(
                     return;
                 }
             }
+        }
+    }
+}
+
+#[inline]
+fn point_to_segment_dist_sq(p: [f32; 2], a: [f32; 2], b: [f32; 2]) -> f32 {
+    let (vx, vy) = (b[0] - a[0], b[1] - a[1]);
+    let len_sq = vx * vx + vy * vy;
+    let t = if len_sq > 1e-6 {
+        (((p[0] - a[0]) * vx + (p[1] - a[1]) * vy) / len_sq).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let (px, py) = (a[0] + vx * t - p[0], a[1] + vy * t - p[1]);
+    px * px + py * py
+}
+
+fn pick_hovered_rail_segment(
+    state: &RailwayRenderState,
+    pointer_world: [f32; 2],
+    max_world_dist: f32,
+    fog_visible: Option<&sow_core::bitset::DenseBitSet>,
+) -> Option<usize> {
+    if state.segments.is_empty() || max_world_dist <= 0.0 {
+        return None;
+    }
+    let cx = (pointer_world[0].floor() as i32).div_euclid(CHUNK);
+    let cy = (pointer_world[1].floor() as i32).div_euclid(CHUNK);
+    let max_sq = max_world_dist * max_world_dist;
+    let mut best: Option<(f32, usize)> = None;
+
+    for dy in -1..=1 {
+        for dx in -1..=1 {
+            let Some(indices) = state.cells.get(&(cx + dx, cy + dy)) else {
+                continue;
+            };
+            for &seg_idx in indices {
+                let seg = &state.segments[seg_idx];
+                if let Some(visible) = fog_visible
+                    && !seg.path_tiles.iter().all(|&tile| visible.contains(tile))
+                {
+                    continue;
+                }
+                for pair in seg.points.windows(2) {
+                    let d_sq = point_to_segment_dist_sq(pointer_world, pair[0], pair[1]);
+                    if d_sq <= max_sq && best.is_none_or(|(b_sq, _)| d_sq < b_sq) {
+                        best = Some((d_sq, seg_idx));
+                    }
+                }
+            }
+        }
+    }
+    best.map(|(_, idx)| idx)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn draw_highlight_leg(
+    text: &mut TextRenderer,
+    a: [f32; 2],
+    b: [f32; 2],
+    halo_width: f32,
+    core_width: f32,
+    halo_color: [f32; 4],
+    core_color: [f32; 4],
+    dashed: bool,
+    viewport: [f32; 2],
+) {
+    if ((a[0] - b[0]).abs() + (a[1] - b[1]).abs()) < 0.5 {
+        return;
+    }
+    let horizontal = (a[0] - b[0]).abs() >= (a[1] - b[1]).abs();
+    let (start, end) = if horizontal {
+        (a[0].min(b[0]), a[0].max(b[0]))
+    } else {
+        (a[1].min(b[1]), a[1].max(b[1]))
+    };
+    let length = end - start;
+    let center = [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5];
+    let viewport_limit = if horizontal { viewport[0] } else { viewport[1] };
+
+    push_axis_strip(text, center, horizontal, length, halo_width, halo_color);
+    if dashed {
+        draw_leg_marks(
+            text,
+            center,
+            horizontal,
+            start,
+            end,
+            viewport_limit,
+            (core_width * 4.2).max(10.0),
+            (core_width * 2.2).max(5.5),
+            core_width,
+            core_color,
+        );
+    } else {
+        push_axis_strip(text, center, horizontal, length, core_width, core_color);
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_hover_rail_highlight(
+    text: &mut TextRenderer,
+    state: &RailwayRenderState,
+    seg_idx: usize,
+    sim: &SimState,
+    input: &InputState,
+    fog_of_war: bool,
+    width: f32,
+    viewport: [f32; 2],
+) {
+    let seg = &state.segments[seg_idx];
+    if let Some(route_indices) = state.routes_by_track_key.get(&seg.key) {
+        for &route_idx in route_indices {
+            let route = &state.train_routes[route_idx];
+            if !route_visible(route, input, viewport[0], viewport[1], width * 2.0)
+                || (fog_of_war
+                    && !route
+                        .path_tiles
+                        .iter()
+                        .all(|&tile| sim.fog_visible.contains(tile)))
+            {
+                continue;
+            }
+            for pair in route.points.windows(2) {
+                let a = input.world_to_screen(pair[0]);
+                let b = input.world_to_screen(pair[1]);
+                if route_in_view(a, a, b, viewport[0], viewport[1], width * 2.0) {
+                    draw_highlight_leg(
+                        text,
+                        a,
+                        b,
+                        (width * 2.1).max(3.5),
+                        (width * 1.15).max(1.8),
+                        [1.0, 0.84, 0.28, 0.16],
+                        [1.0, 0.88, 0.42, 0.55],
+                        false,
+                        viewport,
+                    );
+                }
+            }
+        }
+    }
+
+    for pair in seg.points.windows(2) {
+        let a = input.world_to_screen(pair[0]);
+        let b = input.world_to_screen(pair[1]);
+        if route_in_view(a, a, b, viewport[0], viewport[1], width * 3.0) {
+            draw_highlight_leg(
+                text,
+                a,
+                b,
+                (width * 2.7).max(4.5),
+                (width * 1.4).max(2.2),
+                [1.0, 0.84, 0.25, 0.34],
+                [1.0, 0.92, 0.52, 0.96],
+                false,
+                viewport,
+            );
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_placement_rail_highlight(
+    text: &mut TextRenderer,
+    state: &mut RailwayRenderState,
+    snapshot: &SimSnapshot,
+    sim: &SimState,
+    input: &InputState,
+    kind: BuildingKind,
+    tile_idx: u32,
+    width: f32,
+    sf: f32,
+    viewport: [f32; 2],
+) {
+    let Some(engine) = sim.engine.as_ref() else {
+        return;
+    };
+    let tracks_ptr = std::sync::Arc::as_ptr(&snapshot.railway_tracks) as usize;
+    let key = (kind, tile_idx, tracks_ptr, snapshot.buildings.len());
+    if state.cached_preview_key != Some(key) {
+        state.station_tiles.clear();
+        state.station_tiles.extend(
+            snapshot
+                .buildings
+                .iter()
+                .filter(|b| b.kind.is_enabled() && b.level > 0 && !b.under_construction)
+                .map(|b| (b.id, b.tile_idx)),
+        );
+        state.cached_preview = preview_building_rail_connection(
+            &state.track_index_by_tile,
+            &state.station_tiles,
+            &engine.state.map,
+            kind,
+            tile_idx,
+            &mut state.preview_astar,
+        );
+        state.cached_ghost_points.clear();
+        for path in &state.cached_preview.ghost_paths {
+            let compressed = compress_path(path, sim.map_w);
+            let pts: Vec<[f32; 2]> = compressed
+                .iter()
+                .map(|&tile| world_point(tile, sim.map_w))
+                .collect();
+            if pts.len() >= 2 {
+                state.cached_ghost_points.push(pts);
+            }
+        }
+        state.cached_preview_key = Some(key);
+    }
+
+    for seg_key in &state.cached_preview.snap_tracks {
+        let Some(&seg_idx) = state.track_index_by_key.get(seg_key) else {
+            continue;
+        };
+        let segment = &state.segments[seg_idx];
+        for pair in segment.points.windows(2) {
+            let a = input.world_to_screen(pair[0]);
+            let b = input.world_to_screen(pair[1]);
+            if route_in_view(a, a, b, viewport[0], viewport[1], width * 3.0) {
+                draw_highlight_leg(
+                    text,
+                    a,
+                    b,
+                    (width * 2.8).max(4.5 * sf),
+                    (width * 1.45).max(2.2 * sf),
+                    [0.18, 0.88, 0.34, 0.34],
+                    [0.24, 0.96, 0.42, 0.95],
+                    false,
+                    viewport,
+                );
+            }
+        }
+    }
+
+    for pts in &state.cached_ghost_points {
+        for pair in pts.windows(2) {
+            let a = input.world_to_screen(pair[0]);
+            let b = input.world_to_screen(pair[1]);
+            if route_in_view(a, a, b, viewport[0], viewport[1], width * 3.0) {
+                draw_highlight_leg(
+                    text,
+                    a,
+                    b,
+                    (width * 2.1).max(3.5 * sf),
+                    (width * 1.2).max(1.8 * sf),
+                    [0.25, 0.90, 0.55, 0.20],
+                    [0.55, 0.98, 0.72, 0.78],
+                    true,
+                    viewport,
+                );
+            }
+        }
+        if let Some(&end_pt) = pts.last() {
+            let end_screen = input.world_to_screen(end_pt);
+            text.push_ring(
+                end_screen,
+                (width * 1.9).max(4.0 * sf),
+                [0.24, 0.96, 0.45, 0.88],
+                (1.8 * sf).max(1.0),
+            );
         }
     }
 }
@@ -489,7 +848,8 @@ fn draw_track_leg(
     let length = end - start;
     let center = [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5];
     let viewport_limit = if horizontal { viewport[0] } else { viewport[1] };
-    let detail_zoom = zoom_scaled >= 1.1;
+    let macro_lod = zoom_scaled < 0.75;
+    let detail_zoom = zoom_scaled >= 1.35 && text.remaining_instance_capacity() > 6_000;
 
     if level < 6 {
         let (border_color, road_color, road_scale) = match level {
@@ -520,6 +880,10 @@ fn draw_track_leg(
             ),
         };
         let inner = width * road_scale;
+        if macro_lod {
+            push_axis_strip(text, center, horizontal, length, inner, road_color);
+            return;
+        }
         let outer = inner * 1.32;
         push_axis_strip(text, center, horizontal, length, outer, border_color);
         push_axis_strip(text, center, horizontal, length, inner, road_color);
@@ -586,6 +950,10 @@ fn draw_track_leg(
             (width * 0.26).max(0.75),
         ),
     };
+    if macro_lod {
+        push_axis_strip(text, center, horizontal, length, bed_w * 0.85, rail_color);
+        return;
+    }
     push_axis_strip(text, center, horizontal, length, bed_w, bed_color);
     if detail_zoom {
         let (tie_step, tie_thick, tie_span, tie_color) = match level {
@@ -987,9 +1355,16 @@ fn draw_train_car(
     }
 }
 
-fn train_position(points: &[[f32; 2]], phase: f32, gap: f32) -> ([f32; 2], [f32; 2], bool) {
-    let length = polyline_length(points);
+fn train_position(
+    points: &[[f32; 2]],
+    length: f32,
+    phase: f32,
+    gap: f32,
+) -> ([f32; 2], [f32; 2], bool) {
     let cycle = length * 2.0;
+    if cycle <= 0.0 {
+        return (*points.first().unwrap_or(&[0.0, 0.0]), [0.0, 0.0], false);
+    }
     let unfolded = (phase - gap).rem_euclid(cycle);
     let forward = unfolded <= length;
     let mut remaining = if forward { unfolded } else { cycle - unfolded };
@@ -1028,14 +1403,117 @@ mod tests {
     #[test]
     fn train_position_distinguishes_outbound_empty_and_return_loaded_trips() {
         let route = [[0.5, 0.5], [10.5, 0.5], [10.5, 5.5]];
-        let (pos_out, dir_out, loaded_out) = train_position(&route, 5.0, 0.0);
+        let length = polyline_length(&route);
+        let (pos_out, dir_out, loaded_out) = train_position(&route, length, 5.0, 0.0);
         assert!(!loaded_out);
         assert_eq!(dir_out, [1.0, 0.0]);
         assert!((pos_out[0] - 5.5).abs() < 1e-4);
 
-        let (pos_ret, dir_ret, loaded_ret) = train_position(&route, 25.0, 0.0);
+        let (pos_ret, dir_ret, loaded_ret) = train_position(&route, length, 25.0, 0.0);
         assert!(loaded_ret);
         assert_eq!(dir_ret, [0.0, -1.0]);
         assert!((pos_ret[1] - 0.5).abs() < 1e-4);
+    }
+
+    #[test]
+    fn assign_chunks_covers_long_axis_legs_in_o_chunks() {
+        let mut cells: HashMap<(i32, i32), Vec<usize>> = HashMap::new();
+        let w = 256u32;
+        // Horizontal leg across chunks 0, 1, 2 then vertical across chunks 0, 1.
+        let path = [10, 140, 90 * w + 140];
+        assign_chunks(&mut cells, 42, &path, w);
+        for chunk in [(0, 0), (1, 0), (2, 0), (2, 1)] {
+            assert_eq!(cells.get(&chunk).map(Vec::as_slice), Some(&[42][..]));
+        }
+        assert!(!cells.contains_key(&(0, 1)));
+    }
+
+    #[test]
+    fn sync_links_only_preserves_track_cells_and_updates_levels() {
+        let map_w = 128u32;
+        let tracks = std::sync::Arc::new(vec![RailwayTrack {
+            from_node_id: 1,
+            to_node_id: 2,
+            path: vec![2 * map_w + 2, 2 * map_w + 40],
+        }]);
+        let link1 = RailwayLink {
+            from_building_id: 1,
+            to_building_id: 2,
+            from_tile: 2 * map_w + 2,
+            owner_id: 1,
+            level: 1,
+            distance: 38,
+            station_path: vec![1, 2],
+            route_path: vec![2 * map_w + 2, 2 * map_w + 40],
+            station_path_edge_distances: vec![38],
+            station_stop_count: 1,
+            period_ticks: 100,
+            opened_at: 0,
+        };
+        let mut snap = SimSnapshot {
+            tick: 1,
+            phase: sow_core::game::GamePhase::Playing,
+            spawn_timer_secs: None,
+            players: Vec::new(),
+            dirty_tiles: Vec::new(),
+            fleets: Vec::new(),
+            attacks: Vec::new(),
+            buildings: Vec::new(),
+            railway_links: std::sync::Arc::new(vec![link1.clone()]),
+            railway_tracks: std::sync::Arc::clone(&tracks),
+            projectiles: Vec::new(),
+            nuke_alerts: Vec::new(),
+            resource_transfers: Vec::new(),
+            resource_rejections: Vec::new(),
+            help_call_rejections: Vec::new(),
+            resource_transfer_rejections: Vec::new(),
+            winner: None,
+            winning_team: None,
+            defense_posts: Vec::new(),
+            defense_dirty: false,
+            total_land_tiles: 0,
+            sea_lanes: std::sync::Arc::new(Vec::new()),
+        };
+
+        let mut render_state = RailwayRenderState::default();
+        render_state.sync(&snap, map_w, false);
+        assert_eq!(render_state.segments.len(), 1);
+        assert_eq!(render_state.segments[0].level, 1);
+        let orig_cells_len = render_state.cells.len();
+
+        let mut upgraded = link1;
+        upgraded.level = 7;
+        snap.tick = 2;
+        snap.railway_links = std::sync::Arc::new(vec![upgraded]);
+        render_state.sync(&snap, map_w, false);
+        assert_eq!(render_state.segments.len(), 1);
+        assert_eq!(render_state.segments[0].level, 7);
+        assert_eq!(render_state.cells.len(), orig_cells_len);
+    }
+
+    #[test]
+    fn pick_hovered_rail_segment_hits_chunk_local_track_and_ignores_distant() {
+        let mut cells: HashMap<(i32, i32), Vec<usize>> = HashMap::new();
+        let w = 128u32;
+        let path = [10 * w + 5, 10 * w + 30];
+        assign_chunks(&mut cells, 0, &path, w);
+        let state = RailwayRenderState {
+            cells,
+            segments: vec![RailSegment {
+                key: (1, 2),
+                points: vec![[5.5, 10.5], [30.5, 10.5]],
+                path_tiles: Vec::new(),
+                level: 1,
+            }],
+            ..Default::default()
+        };
+        assert_eq!(
+            pick_hovered_rail_segment(&state, [15.0, 11.1], 1.25, None),
+            Some(0)
+        );
+        assert_eq!(
+            pick_hovered_rail_segment(&state, [15.0, 18.0], 1.25, None),
+            None
+        );
     }
 }

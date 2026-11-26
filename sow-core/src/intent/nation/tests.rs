@@ -1431,13 +1431,13 @@ mod bot_iq_alliance_tests {
         engine.state.player_mut(1).unwrap().player_type = crate::player::PlayerType::Nation;
         add_nuclear_city(&mut engine, 103, 1, 0);
 
-        // Give bot 1 a silo with an available charge
+        // Give bot 1 a Lv5 MilitaryCamp (with a covering City) for Atom Bomb charges
         engine.buildings.push(crate::building::Building {
             id: 100,
             owner_id: 1,
             tile_idx: 0,
-            kind: BuildingKind::MissileSilo,
-            level: 1,
+            kind: BuildingKind::MilitaryCamp,
+            level: 5,
             under_construction: false,
             ticks_until_complete: 0,
         });
@@ -1502,13 +1502,13 @@ mod bot_iq_alliance_tests {
         engine.state.player_mut(2).unwrap().player_type = PlayerType::Bot;
         add_nuclear_city(&mut engine, 102, 1, 0);
 
-        // Give bot 1 a silo with an available charge
+        // Give bot 1 a Lv5 MilitaryCamp (with a covering City) for Atom Bomb charges
         engine.buildings.push(crate::building::Building {
             id: 100,
             owner_id: 1,
             tile_idx: 0,
-            kind: BuildingKind::MissileSilo,
-            level: 1,
+            kind: BuildingKind::MilitaryCamp,
+            level: 5,
             under_construction: false,
             ticks_until_complete: 0,
         });
@@ -1564,8 +1564,8 @@ mod bot_iq_alliance_tests {
                 id: 100,
                 owner_id: 1,
                 tile_idx: 0,
-                kind: BuildingKind::MissileSilo,
-                level: 1,
+                kind: BuildingKind::MilitaryCamp,
+                level: 5,
                 under_construction: false,
                 ticks_until_complete: 0,
             },
@@ -1611,8 +1611,8 @@ mod bot_iq_alliance_tests {
             id: 100,
             owner_id: 1,
             tile_idx: 0,
-            kind: BuildingKind::MissileSilo,
-            level: 1,
+            kind: BuildingKind::MilitaryCamp,
+            level: 5,
             under_construction: false,
             ticks_until_complete: 0,
         });
@@ -1802,7 +1802,14 @@ mod bot_iq_alliance_tests {
             ),
         };
         let mut first_build = Vec::new();
-        engine.nation_run_structure_build_for_slot(&slot, 1, 140, 5.0, &mut first_build);
+        engine.nation_run_structure_build_for_slot(
+            &slot,
+            1,
+            140,
+            5.0,
+            &crate::intent::nation::AiTickShared::default(),
+            &mut first_build,
+        );
         assert!(matches!(
             first_build.first().map(|decision| &decision.intent),
             Some(GameplayIntent::BuildStructure {
@@ -2023,19 +2030,20 @@ mod bot_iq_alliance_tests {
 
         let mut engine = SowEngine::new(game, WaterComponents::default());
         let city_tile = 16 * w + 16;
+        let district_tile = 16 * w + 20;
         engine.buildings.push(crate::building::Building {
             id: 1,
             owner_id: 1,
             tile_idx: city_tile,
             kind: BuildingKind::City,
-            level: 1,
+            level: 2,
             under_construction: false,
             ticks_until_complete: 0,
         });
         engine.buildings.push(crate::building::Building {
             id: 2,
             owner_id: 1,
-            tile_idx: city_tile,
+            tile_idx: district_tile,
             kind: BuildingKind::TradingPost,
             level: 1,
             under_construction: false,
@@ -2048,7 +2056,7 @@ mod bot_iq_alliance_tests {
                 player_id: 1,
                 intent: crate::protocol::GameplayIntent::BuildStructure {
                     kind: BuildingKind::TradingPost,
-                    target_tile: city_tile,
+                    target_tile: district_tile,
                 },
             },
             0,

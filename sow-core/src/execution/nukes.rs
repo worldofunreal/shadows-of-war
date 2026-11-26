@@ -285,10 +285,7 @@ impl SowEngine {
                     (before - damage.max(0.0)).max(0.0)
                 };
                 if target.troops <= 0.0 {
-                    target.retreating = false;
-                    if let Some(warship) = target.warship.as_mut() {
-                        warship.target_fleet = None;
-                    }
+                    mark_fleet_sunk(target);
                 }
                 (before, cargo_lost, target.troops <= 0.0)
             };
@@ -341,7 +338,7 @@ impl SowEngine {
         }
     }
 
-    fn detonate_nuke(
+    pub(crate) fn detonate_nuke(
         &mut self,
         cx: u32,
         cy: u32,
@@ -435,6 +432,31 @@ impl SowEngine {
             }
             keep
         });
+        if !destroyed_ids.is_empty() || !self.railway_links.is_empty() {
+            let destroyed_set: std::collections::HashSet<u64> =
+                destroyed_ids.iter().copied().collect();
+            for link in self.railway_links.iter() {
+                if link.period_ticks == 0 || destroyed_set.contains(&link.from_building_id) {
+                    continue;
+                }
+                let dest_destroyed = destroyed_set.contains(&link.to_building_id);
+                let cart_hit = !dest_destroyed
+                    && crate::building::cart_tile_at_tick(link, self.state.tick, w).is_some_and(
+                        |tile| {
+                            let tx = tile % w;
+                            let ty = tile / w;
+                            let dx = tx as i64 - cx as i64;
+                            let dy = ty as i64 - cy as i64;
+                            dx * dx + dy * dy <= inner_sq
+                        },
+                    );
+                if (dest_destroyed || cart_hit)
+                    && !self.nuked_interrupted_posts.contains(&link.from_building_id)
+                {
+                    self.nuked_interrupted_posts.push(link.from_building_id);
+                }
+            }
+        }
         for id in destroyed_ids {
             self.building_productions.remove(&id);
             self.silo_cooldowns.remove(&id);
@@ -448,6 +470,45 @@ impl SowEngine {
         self.render_defense_dirty = true;
         if destroyed_port {
             self.sea_lanes_dirty = true;
+        }
+
+        // Destroy fleets inside the inner fireball and apply blast-wave damage in the outer ring.
+        for fleet in &mut self.fleets {
+            if fleet.troops <= 0.0 {
+                continue;
+            }
+            let fx = fleet.current_tile % w;
+            let fy = fleet.current_tile / w;
+            let dx = fx as i64 - cx as i64;
+            let dy = fy as i64 - cy as i64;
+            let dist_sq = dx * dx + dy * dy;
+            if dist_sq > outer_sq {
+                continue;
+            }
+            let before = fleet.troops;
+            if dist_sq <= inner_sq {
+                fleet.troops = 0.0;
+            } else if fleet.owner_id != owner_id {
+                let ratio = 1.0 - (dist_sq as f64 / outer_sq as f64);
+                let damage = match fleet.unit_type {
+                    crate::game::UnitType::TransportShip => before * ratio,
+                    crate::game::UnitType::TradeShip | crate::game::UnitType::Warship => {
+                        ratio * fleet.unit_type.max_health()
+                    }
+                };
+                fleet.troops = (before - damage.max(0.0)).max(0.0);
+            }
+            if fleet.troops <= 0.0 {
+                mark_fleet_sunk(fleet);
+                self.state.events.push(crate::game::GameEvent::FleetNuked {
+                    fleet_id: fleet.id,
+                    owner_id,
+                    target_owner: fleet.owner_id,
+                    unit_type: fleet.unit_type,
+                    tile: fleet.current_tile,
+                    troops_lost: before,
+                });
+            }
         }
 
         self.state
@@ -472,6 +533,13 @@ impl SowEngine {
             }
         }
         territory_changes
+    }
+}
+
+fn mark_fleet_sunk(fleet: &mut crate::warp_fleet::WarpFleet) {
+    fleet.retreating = false;
+    if let Some(warship) = fleet.warship.as_mut() {
+        warship.target_fleet = None;
     }
 }
 
@@ -789,5 +857,82 @@ mod tests {
             .projectiles
             .iter()
             .all(|p| p.kind == ProjectileKind::Nuke { level: 4 }));
+    }
+
+    fn naval_nuke_test_engine() -> SowEngine {
+        let config = GameConfig::default();
+        let mut state = GameState::new(1, 64, 64, config.clone());
+        state.phase = GamePhase::Playing;
+        state.register_player(Player::new_human(1, "Attacker".into(), [1.0; 3], &config));
+        state.register_player(Player::new_human(2, "Defender".into(), [1.0; 3], &config));
+        for t in state.map.terrain.iter_mut() {
+            *t = MapTile::from_byte(0x00);
+        }
+        SowEngine::new(state, WaterComponents::default())
+    }
+
+    #[test]
+    fn detonate_nuke_destroys_all_naval_units_inside_inner_radius() {
+        let mut engine = naval_nuke_test_engine();
+        // AtomBomb: inner=12, outer=30
+        let transport_in = 32 * 64 + 34; // dist=2 <= 12
+        let trade_in = 35 * 64 + 32; // dist=3 <= 12
+        let friendly_ws_in = 32 * 64 + 28; // dist=4 <= 12
+        let safe_outside = 32 * 64 + 63; // dist=31 > 30
+        engine.add_fleet(WarpFleet::new(1, 2, 1, UnitType::TransportShip, 300.0, (transport_in, transport_in), Vec::new()));
+        engine.add_fleet(WarpFleet::new(2, 2, 1, UnitType::TradeShip, 100.0, (trade_in, trade_in), Vec::new()));
+        engine.add_fleet(WarpFleet::new(3, 1, 2, UnitType::Warship, 1000.0, (friendly_ws_in, friendly_ws_in), Vec::new()));
+        engine.add_fleet(WarpFleet::new(4, 2, 1, UnitType::Warship, 1000.0, (safe_outside, safe_outside), Vec::new()));
+
+        engine.detonate_nuke(32, 32, 12, 30, 1);
+
+        assert_eq!(engine.fleets.iter().find(|f| f.id == 1).unwrap().troops, 0.0);
+        assert_eq!(engine.fleets.iter().find(|f| f.id == 2).unwrap().troops, 0.0);
+        assert_eq!(engine.fleets.iter().find(|f| f.id == 3).unwrap().troops, 0.0);
+        assert_eq!(engine.fleets.iter().find(|f| f.id == 4).unwrap().troops, 1000.0);
+
+        let nuked_ids: Vec<u64> = engine
+            .state
+            .events
+            .iter()
+            .filter_map(|e| match e {
+                GameEvent::FleetNuked { fleet_id, .. } => Some(*fleet_id),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(nuked_ids, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn detonate_nuke_damages_enemy_fleets_and_spares_friendly_in_outer_radius() {
+        let mut engine = naval_nuke_test_engine();
+        // Dist = 20 is between inner=12 and outer=30. ratio = 1 - 400/900 = 5/9.
+        let outer_tile = 32 * 64 + 52;
+        let low_hp_tile = 52 * 64 + 32; // dist=20
+        engine.add_fleet(WarpFleet::new(10, 2, 1, UnitType::Warship, 1000.0, (outer_tile, outer_tile), Vec::new()));
+        engine.add_fleet(WarpFleet::new(11, 2, 1, UnitType::TransportShip, 900.0, (outer_tile, outer_tile), Vec::new()));
+        engine.add_fleet(WarpFleet::new(12, 1, 2, UnitType::Warship, 1000.0, (outer_tile, outer_tile), Vec::new()));
+        engine.add_fleet(WarpFleet::new(13, 2, 1, UnitType::TradeShip, 50.0, (low_hp_tile, low_hp_tile), Vec::new()));
+
+        engine.detonate_nuke(32, 32, 12, 30, 1);
+
+        let enemy_ws = engine.fleets.iter().find(|f| f.id == 10).unwrap().troops;
+        let enemy_tp = engine.fleets.iter().find(|f| f.id == 11).unwrap().troops;
+        let own_ws = engine.fleets.iter().find(|f| f.id == 12).unwrap().troops;
+        let weak_trade = engine.fleets.iter().find(|f| f.id == 13).unwrap().troops;
+        assert!(enemy_ws > 400.0 && enemy_ws < 500.0, "expected ~444 HP, got {enemy_ws}");
+        assert!(enemy_tp > 380.0 && enemy_tp < 420.0, "expected ~400 troops, got {enemy_tp}");
+        assert_eq!(own_ws, 1000.0);
+        assert_eq!(weak_trade, 0.0);
+        let nuked_ids: Vec<u64> = engine
+            .state
+            .events
+            .iter()
+            .filter_map(|e| match e {
+                GameEvent::FleetNuked { fleet_id, .. } => Some(*fleet_id),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(nuked_ids, vec![13]);
     }
 }

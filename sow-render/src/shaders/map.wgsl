@@ -33,7 +33,8 @@ struct Globals {
     blend_mode: f32,
     effect_heartbeat: f32,
     alliance_count: f32,
-    _pad3: f32,
+    // Monotonic 64 Hz tick (15 bits) and conquest flash length, for GPU-side decay.
+    flash_now_tick: f32,
     effect_golden_hour: f32,
     effect_holo_grid: f32,
     attack_flash_target: f32,
@@ -41,7 +42,7 @@ struct Globals {
     alert_intensity: f32,
     fog_of_war: f32,
     tutorial_target_player: f32,
-    _pad2: f32,
+    flash_duration_ticks: f32,
     alert_color: vec4<f32>,
     // Entity requesting terms in the open tutorial dialog: [player_id, age_secs, 0, 0].
     dialog_border: vec4<f32>,
@@ -74,6 +75,11 @@ var terrain_tile_1_texture: texture_2d<f32>;
 var terrain_tile_2_texture: texture_2d<f32>;
 var terrain_tile_3_texture: texture_2d<f32>;
 var skin_sampler: sampler;
+// Per-tile visual clocks (Rg32Uint). The CPU only records when a flash or a fog
+// fade started; the decay is computed here, so no per-frame CPU pass has to touch
+// a tile just to darken it. x = flash start tick (bit 31 = ability), y = fog
+// hidden tick (0 = visible, 0xFFFFFFFF = dark from the first frame).
+var clock_texture: texture_2d<u32>;
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
@@ -121,8 +127,70 @@ fn get_cell_terrain(hex: vec2<i32>) -> u32 {
     return u32(textureLoad(terrain_texture, vec2<i32>(hex.x, hex.y), 0).x * 255.0 + 0.5);
 }
 
+// ── Per-tile visual clocks ───────────────────────────────────────────────────
+// The CPU stores only when a flash or a fog fade started (64 Hz ticks, full u32).
+// The decay runs here: one texture load per pixel instead of a per-frame CPU
+// pass that repacks and re-uploads every tile that is merely darkening.
+const FLASH_ABILITY_BIT: u32 = 0x80000000u;
+const FLASH_TICK_MASK: u32 = 0x7FFFFFFFu;
+// Fog fades out over 1.5 s, matching the old CPU decay rate.
+const FADE_DURATION_TICKS: f32 = 96.0;
+// A tile already dark on the first frame: never fade it in with the map.
+const FADE_HIDDEN_SENTINEL: u32 = 0xFFFFFFFFu;
+
+fn flash_now() -> u32 {
+    return u32(globals.flash_now_tick);
+}
+
+/// Conquest flash for this tile: x = intensity 0..1, y = ability flag.
+fn tile_flash(cell: vec2<i32>) -> vec2<f32> {
+    let packed = textureLoad(clock_texture, cell, 0).x;
+    let ability = select(0.0, 1.0, (packed & FLASH_ABILITY_BIT) != 0u);
+    let start = packed & FLASH_TICK_MASK;
+    if start == 0u {
+        return vec2<f32>(0.0, ability);
+    }
+    let age = flash_now() - start;
+    let duration = max(globals.flash_duration_ticks, 1.0);
+    return vec2<f32>(clamp(1.0 - f32(age) / duration, 0.0, 1.0), ability);
+}
+
+/// Fog of war fade for this tile: 1 = visible, 0 = fully hidden.
+fn tile_vision_fade(cell: vec2<i32>) -> f32 {
+    let hidden = textureLoad(clock_texture, cell, 0).y;
+    if hidden == 0u {
+        return 1.0;
+    }
+    if hidden == FADE_HIDDEN_SENTINEL {
+        return 0.0;
+    }
+    let age = flash_now() - hidden;
+    return clamp(1.0 - f32(age) / FADE_DURATION_TICKS, 0.0, 1.0);
+}
+
 fn placement_own(cell: vec2<i32>) -> bool {
     return get_cell_owner(cell) == u32(globals.my_player_id) && (get_cell_terrain(cell) & 128u) != 0u;
+}
+
+// ── Procedural biome noise (render-only, no per-tile biome data) ─────────────
+// Cheap sin-free hash + value noise. Two octaves max so the full-screen pass
+// stays inside the mobile/WebGL fragment budget. Everything below is gated by
+// the biome/wave flags so an idle effect costs nothing.
+fn biome_hash(p: vec2<f32>) -> f32 {
+    var q = fract(p * vec2<f32>(0.1031, 0.1030));
+    q = q + dot(q, q.yx + 33.33);
+    return fract((q.x + q.y) * q.x);
+}
+
+fn biome_vnoise(p: vec2<f32>) -> f32 {
+    let i = floor(p);
+    let f = fract(p);
+    let u = f * f * (3.0 - 2.0 * f);
+    let a = biome_hash(i);
+    let b = biome_hash(i + vec2<f32>(1.0, 0.0));
+    let c = biome_hash(i + vec2<f32>(0.0, 1.0));
+    let d = biome_hash(i + vec2<f32>(1.0, 1.0));
+    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 }
 
 fn world_to_hex(world_pos: vec2<f32>) -> vec2<i32> {
@@ -510,9 +578,9 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
     let terrain_byte = u32(terrain_rgba.x * 255.0 + 0.5);
     let owner_packed = textureLoad(owner_texture, pixel_coords, 0).x;
     let owner_id = owner_packed & 0xFFFFu;
-    let flash_byte = (owner_packed >> 16u) & 0xFFu;
-    let ability_flash = (flash_byte & 0x80u) != 0u;
-    var flash_val = f32(flash_byte & 0x7Fu) / 127.0;
+    let flash = tile_flash(pixel_coords);
+    let ability_flash = flash.y > 0.5;
+    var flash_val = flash.x;
     if globals.preview_effect == 2.0 && owner_id == u32(globals.my_player_id) {
         flash_val = max(flash_val, 1.0 - globals.preview_phase);
     }
@@ -576,7 +644,19 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
                 mag_center * globals.shader_params[__MAP_WATER_DEPTH_SCALE__].x,
                 globals.shader_params[__MAP_WATER_DEPTH_CAP__].x
             );
-            let color_flat = max(vec3<f32>(0.0), ocean - vec3<f32>(m / 255.0)) * globals.shader_params[__MAP_WATER_BRIGHTNESS__].x;
+            var color_flat = max(vec3<f32>(0.0), ocean - vec3<f32>(m / 255.0)) * globals.shader_params[__MAP_WATER_BRIGHTNESS__].x;
+            // Animated procedural swell + a moving sun glint. Gated by the wave
+            // strength slider so calm water costs nothing.
+            let wave_strength = globals.shader_params[__MAP_WATER_WAVE_STRENGTH__].x;
+            if wave_strength > 0.0001 {
+                let ws = globals.shader_params[__MAP_WATER_WAVE_SCALE__].x;
+                let t = globals.time;
+                let w = biome_vnoise(in.world * ws + vec2<f32>(t * 0.35, t * 0.22)) * 0.6
+                    + biome_vnoise(in.world * (ws * 2.3) - vec2<f32>(t * 0.28, t * 0.11)) * 0.4;
+                color_flat = color_flat * (1.0 + (w - 0.5) * wave_strength * 2.0);
+                let glint = smoothstep_safe(0.78, 0.95, w);
+                color_flat = color_flat + vec3<f32>(0.9, 0.95, 1.0) * glint * wave_strength * 0.6;
+            }
             terrain_color = vec4<f32>(color_flat, 1.0);
         } else {
             let inland = globals.shader_params[__MAP_WATER_INLAND__].rgb * globals.shader_params[__MAP_WATER_INLAND_BRIGHTNESS__].x;
@@ -588,6 +668,47 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
     // Evaluate terrain and territory blending in sRGB space (matching OpenFront's TerritoryPass),
     // then convert once to linear RGB before lighting, borders, and output.
     var base_srgb = clamp(terrain_color.rgb, vec3<f32>(0.0), vec3<f32>(1.0));
+
+    // ── Procedural biome detail: flat elevation bands -> textured biome patches ──
+    // A low-frequency moisture field plus elevation selects lush vegetation, arid
+    // ground, snow or volcanic rock; a sub-tile noise adds the micro-texture so a
+    // tile reads as a piece of forest/desert instead of one flat color. Skipped when
+    // the painted Petén art overlay is active (it replaces the base entirely).
+    if is_land
+        && globals.shader_params[__MAP_BIOME_DETAIL__].x > 0.5
+        && globals.shader_params[__MAP_PETEN_CANOPY__].x <= 0.5
+    {
+        let scale = globals.shader_params[__MAP_BIOME_SCALE__].x;
+        let moisture = biome_vnoise(in.world * 0.12 + vec2<f32>(17.3, 9.1));
+        let detail = biome_vnoise(in.world * scale) * 0.65
+            + biome_vnoise(in.world * (scale * 2.7) + vec2<f32>(5.2, 1.3)) * 0.35;
+
+        // Climate weights: wet lowlands grow vegetation, dry lowlands turn arid,
+        // high ground turns to rock then snow.
+        let veg = clamp(moisture * 1.5 - mag_center * 0.045, 0.0, 1.0);
+        let arid = clamp((1.0 - moisture) * 1.3 - mag_center * 0.03, 0.0, 1.0);
+        let hi = globals.shader_params[__MAP_LAND_HIGHLANDS_LIMIT__].x;
+        let rock = smoothstep_safe(hi, 30.0, mag_center);
+        let snow = smoothstep_safe(hi + 4.0, 30.0, mag_center);
+
+        var col = base_srgb;
+        // Lush vegetation: deepen toward a green tint and clump into canopy blobs.
+        let veg_tint = globals.shader_params[__MAP_VEGETATION_TINT__].rgb;
+        col = mix(col, col * veg_tint * 1.7, veg * 0.55);
+        let canopy = smoothstep_safe(0.45, 0.75, detail);
+        col = mix(col, col * 0.70, veg * canopy * 0.45);
+        col = mix(col, col * 1.20, veg * (1.0 - canopy) * 0.22);
+        // Arid ground: warm tan with a fine grain.
+        col = mix(col, globals.shader_params[__MAP_ARID_TINT__].rgb, arid * 0.45);
+        col = col * (1.0 + (detail - 0.5) * arid * 0.35);
+        // Volcanic rock and snow caps on the peaks.
+        col = mix(col, col * vec3<f32>(0.45, 0.40, 0.42), rock * (1.0 - snow) * 0.5);
+        col = mix(col, vec3<f32>(0.93, 0.95, 0.98), snow * 0.8);
+        // Generic micro-relief so every biome has a grain, scaled by the dev slider.
+        col = col * (1.0 + (detail - 0.5) * globals.shader_params[__MAP_BIOME_STRENGTH__].x);
+        base_srgb = clamp(col, vec3<f32>(0.0), vec3<f32>(1.0));
+    }
+
     if is_land && globals.shader_params[__MAP_PETEN_CANOPY__].x > 0.5 {
         if globals.shader_params[__MAP_PETEN_CANOPY__].y > 0.5 {
             let chunk_size = globals.map_size / vec2<f32>(2.0, 2.0);
@@ -988,7 +1109,7 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
 
     // ── Fog of War shading ──
     if (globals.fog_of_war > 0.0) {
-        let vision_fade = f32((owner_packed >> 26u) & 0x3Fu) / 63.0;
+        let vision_fade = tile_vision_fade(pixel_coords);
         base_color = base_color * mix(globals.shader_params[__MAP_FOG_VISIBILITY_FLOOR__].x, globals.shader_params[__MAP_FOG_VISIBILITY_GAIN__].x, vision_fade);
     }
 

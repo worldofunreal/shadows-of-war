@@ -28,7 +28,8 @@ pub struct MapGlobals {
     pub effect_heartbeat: f32,
     /// Alliance celebration pairs in use (0 = idle); bounds the per-pixel loop.
     pub alliance_count: f32,
-    pub _pad3: f32,
+    /// Monotonic 64 Hz tick (full u32). Drives GPU-side flash and fog-fade decay.
+    pub flash_now_tick: f32,
     pub effect_golden_hour: f32,
     pub effect_holo_grid: f32,
     /// Player ID whose borders should flash red (0 = none).
@@ -40,7 +41,8 @@ pub struct MapGlobals {
     pub fog_of_war: f32,
     /// Player ID highlighted by the active tutorial objective (0 = none).
     pub tutorial_target_player: f32,
-    pub _pad2: f32,
+    /// Conquest flash length in 64 Hz ticks; the fragment shader fades over it.
+    pub flash_duration_ticks: f32,
     /// Align the following host array to WGSL's 16-byte `vec4` boundary.
     pub _pad_alert_color: [f32; 2],
     /// Viewport alert vignette color: [r, g, b, a].

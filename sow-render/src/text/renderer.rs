@@ -10,9 +10,33 @@ use crate::text::types::{
 use blade_graphics as gpu;
 
 pub fn building_sprite_uv(kind: sow_core::game::BuildingKind, level: u8) -> Option<[f32; 4]> {
-    (1..=level.clamp(1, kind.max_level()))
+    let clamped = level.clamp(1, kind.max_level());
+    if let Some(uv) = (1..=clamped)
         .rev()
-        .find_map(|level| crate::text::building_atlas::uv_rect(kind, level))
+        .find_map(|lvl| crate::text::building_atlas::uv_rect(kind, lvl))
+    {
+        if kind == sow_core::game::BuildingKind::Tower && clamped >= 5 {
+            // Until tower-5..8 art is packed, show the SAM sprite for Lv5+ Towers.
+            if crate::text::building_atlas::uv_rect(kind, clamped).is_none()
+                && let Some(sam_uv) = crate::text::building_atlas::uv_rect(
+                    sow_core::game::BuildingKind::SAM,
+                    clamped - 4,
+                )
+            {
+                return Some(sam_uv);
+            }
+        }
+        return Some(uv);
+    }
+    if kind == sow_core::game::BuildingKind::Farm {
+        return (1..=clamped)
+            .rev()
+            .find_map(|lvl| {
+                crate::text::building_atlas::uv_rect(sow_core::game::BuildingKind::TradingPost, lvl)
+            })
+            .or_else(|| crate::text::building_atlas::uv_rect(sow_core::game::BuildingKind::City, 1));
+    }
+    None
 }
 
 pub const MAX_TEXT_GLYPHS: usize = 32_768;
@@ -1152,8 +1176,8 @@ impl TextRenderer {
             ],
             face_dilate: marker.icon_fill.clamp(0.35, 1.0),
             outline_thickness: marker.highlight_width.max(0.0),
-            underlay_offset_y: 0.0,
-            underlay_softness: 0.0,
+            underlay_offset_y: marker.icon_uv[0],
+            underlay_softness: marker.icon_uv[1],
             kind: KIND_BUILDING_MARKER,
         });
     }

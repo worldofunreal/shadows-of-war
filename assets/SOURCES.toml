@@ -29,9 +29,17 @@ placeholder_files = ["sitting_bull_desktop.webp", "sitting_bull_mobile.webp", "m
 
 [buildings]
 path = "assets/art/buildings/"
-source = "project_owner_supplied_and_twemoji_placeholder"
-license = "City, trading post, port, military camp, SAM and silo sheets: project-owner supplied; tower slots: CC-BY-4.0 Twemoji 14.0.2 placeholders pending final art"
-notes = "City, port, trading post and military camp sheets have four columns and two rows with levels ordered left to right, top row first. SAM and silo sheets have two columns and two rows for levels 1–4. Keep visible pixels within the columns and leave a transparent gap between rows. Tower uses individual files for levels 1–4; levels 5–8 use the highest available frame. The packer makes one atlas for the map and HUD."
+source = "project_owner_supplied"
+license = "Project-owner supplied; cleared for distribution"
+files = ["city.png", "farm.png", "trading-post.png", "factory.png", "port.png", "tower.png", "military-camp.png", "sam.png", "silo.png", "cattle.png", "mine.png", "cultural-center.png", "school.png"]
+notes = "All supplied sheets are kept as owner-editable source art. Active kinds use four-column, two-row sheets with levels ordered left to right, top row first; Trading Post levels 1–4 use trading-post.png and levels 5–8 use factory.png. Port and tower sheets came from Downloads as seaport.png and defense-tower.png and are stored here as port.png and tower.png. SAM and silo have two columns and two rows for levels 1–4. cattle, mine, cultural-center and school are preserved for future building kinds but are not in the current BuildingKind enum or runtime atlas. sow-tools packs active kinds into the map and HUD atlas."
+
+[ranked_badges]
+path = "assets/art/ranked/"
+source = "project_owner_supplied"
+license = "Project-owner supplied; cleared for distribution"
+files = ["nomad.png", "chieftain.png", "commander.png", "governor.png", "king.png", "emperor.png", "sovereign.png", "overlord.png", "immortal.png", "deity.png"]
+notes = "One transparent 1600px badge per ranked tier. sow-dist packs these sources into a 5×2 WebP atlas; king.png is the supplied badge_v3_5.png."
 
 [units]
 path = "assets/art/units/"

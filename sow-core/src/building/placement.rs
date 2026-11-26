@@ -1,6 +1,8 @@
-use super::core::BuildingGrid;
+use super::core::{Building, BuildingGrid};
 use crate::game::BuildingKind;
+use crate::game_config::GameConfig;
 use crate::map::{GameMap, TerrainType};
+use crate::protocol::BuildingSnapshot;
 
 /// Frozen spacing used exclusively when verifying pre-v3 recordings.
 const LEGACY_CITY_SPACING: i32 = 6;
@@ -161,6 +163,8 @@ pub enum PlacementError {
     CoastRequired,
     LowlandRequired,
     CityRequired,
+    TooCloseToCity,
+    OutsideCityRange,
 }
 
 impl PlacementError {
@@ -172,8 +176,209 @@ impl PlacementError {
             Self::CoastRequired => "hud.build_coast_required",
             Self::LowlandRequired => "hud.build_military_camp_lowland_required",
             Self::CityRequired => "hud.build_occupied",
+            Self::TooCloseToCity => "hud.build_too_close_to_city",
+            Self::OutsideCityRange => "hud.build_outside_city_range",
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CityAnchor {
+    pub id: u64,
+    pub owner_id: u16,
+    pub x: u32,
+    pub y: u32,
+    pub active_level: u8,
+    pub level: u8,
+}
+
+impl CityAnchor {
+    #[inline]
+    pub fn from_building(b: &Building, map_width: u32) -> Option<Self> {
+        if b.kind != BuildingKind::City || map_width == 0 {
+            return None;
+        }
+        Some(Self {
+            id: b.id,
+            owner_id: b.owner_id,
+            x: b.tile_idx % map_width,
+            y: b.tile_idx / map_width,
+            active_level: b.active_level(),
+            level: b.level,
+        })
+    }
+
+    #[inline]
+    pub fn from_snapshot(b: &BuildingSnapshot, map_width: u32) -> Option<Self> {
+        if b.kind != BuildingKind::City || map_width == 0 {
+            return None;
+        }
+        Some(Self {
+            id: b.id,
+            owner_id: b.owner_id,
+            x: b.tile_idx % map_width,
+            y: b.tile_idx / map_width,
+            active_level: b.active_level(),
+            level: b.level,
+        })
+    }
+}
+
+pub fn city_anchors_from_buildings(buildings: &[Building], map_width: u32) -> Vec<CityAnchor> {
+    buildings
+        .iter()
+        .filter_map(|b| CityAnchor::from_building(b, map_width))
+        .collect()
+}
+
+pub fn city_anchors_from_snapshots(
+    buildings: &[BuildingSnapshot],
+    map_width: u32,
+) -> Vec<CityAnchor> {
+    buildings
+        .iter()
+        .filter_map(|b| CityAnchor::from_snapshot(b, map_width))
+        .collect()
+}
+
+/// Construction radius in tiles for a City at `city_level`.
+#[inline]
+pub fn city_construction_radius(city_level: u8, cfg: &GameConfig) -> u32 {
+    let base = cfg.city_base_radius.max(4);
+    let step = cfg.city_radius_per_level;
+    base.saturating_add(u32::from(city_level.saturating_sub(1)).saturating_mul(step))
+}
+
+/// Minimum spacing required between a newly founded City and an existing City of `existing_level`.
+#[inline]
+pub fn city_exclusion_radius(existing_level: u8, cfg: &GameConfig) -> u32 {
+    city_construction_radius(existing_level.max(1), cfg).saturating_mul(2)
+}
+
+#[inline]
+pub fn city_covers_coord(city: CityAnchor, x: u32, y: u32, cfg: &GameConfig) -> bool {
+    if city.active_level == 0 {
+        return false;
+    }
+    let radius = i64::from(city_construction_radius(city.active_level, cfg));
+    euclid_sq(i64::from(x), i64::from(y), i64::from(city.x), i64::from(city.y))
+        <= radius * radius
+}
+
+pub fn validate_city_spacing(
+    x: u32,
+    y: u32,
+    cities: &[CityAnchor],
+    cfg: &GameConfig,
+) -> Result<(), PlacementError> {
+    for &city in cities {
+        let excl = i64::from(city_exclusion_radius(city.active_level.max(city.level).max(1), cfg));
+        if euclid_sq(i64::from(x), i64::from(y), i64::from(city.x), i64::from(city.y))
+            < excl * excl
+        {
+            return Err(PlacementError::TooCloseToCity);
+        }
+    }
+    Ok(())
+}
+
+pub fn validate_district_city_range(
+    owner_id: u16,
+    x: u32,
+    y: u32,
+    cities: &[CityAnchor],
+    required_city_id: Option<u64>,
+    cfg: &GameConfig,
+) -> Result<(), PlacementError> {
+    let covered = cities.iter().any(|&city| {
+        city.owner_id == owner_id
+            && required_city_id.is_none_or(|id| city.id == id)
+            && city_covers_coord(city, x, y, cfg)
+    });
+    if covered {
+        Ok(())
+    } else {
+        Err(PlacementError::OutsideCityRange)
+    }
+}
+
+pub fn max_covering_city_level(
+    owner_id: u16,
+    x: u32,
+    y: u32,
+    cities: &[CityAnchor],
+    cfg: &GameConfig,
+) -> u8 {
+    cities
+        .iter()
+        .filter(|city| city.owner_id == owner_id && city_covers_coord(**city, x, y, cfg))
+        .map(|city| city.active_level)
+        .max()
+        .unwrap_or(0)
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CitySiteTraits {
+    pub has_coastal_port_access: bool,
+    pub coastal_water_tiles: u32,
+    pub land_tiles: u32,
+    pub highland_tiles: u32,
+    pub mountain_tiles: u32,
+    pub total_buildable_tiles: u32,
+    pub blocked_by_city_spacing: bool,
+}
+
+/// Evaluates terrain pros and cons inside the founding City's initial radius.
+pub fn evaluate_city_site_traits(
+    map: &GameMap,
+    x: u32,
+    y: u32,
+    cities: &[CityAnchor],
+    cfg: &GameConfig,
+) -> CitySiteTraits {
+    let mut traits = CitySiteTraits::default();
+    if map.width == 0 || map.height == 0 || x >= map.width || y >= map.height {
+        return traits;
+    }
+    let radius = city_construction_radius(1, cfg) as i32;
+    let r_sq = i64::from(radius) * i64::from(radius);
+    let min_x = (x as i32 - radius).max(0);
+    let max_x = (x as i32 + radius).min(map.width as i32 - 1);
+    let min_y = (y as i32 - radius).max(0);
+    let max_y = (y as i32 + radius).min(map.height as i32 - 1);
+    for ty in min_y..=max_y {
+        for tx in min_x..=max_x {
+            if euclid_sq(i64::from(tx), i64::from(ty), i64::from(x), i64::from(y)) > r_sq {
+                continue;
+            }
+            let (ux, uy) = (tx as u32, ty as u32);
+            match map.terrain_type(ux, uy) {
+                TerrainType::Water | TerrainType::Lake => {
+                    traits.coastal_water_tiles += 1;
+                }
+                TerrainType::Land => {
+                    traits.land_tiles += 1;
+                    traits.total_buildable_tiles += 1;
+                    if is_shore_land_tile(map, ux, uy) {
+                        traits.has_coastal_port_access = true;
+                    }
+                }
+                TerrainType::Highland => {
+                    traits.highland_tiles += 1;
+                    traits.total_buildable_tiles += 1;
+                    if is_shore_land_tile(map, ux, uy) {
+                        traits.has_coastal_port_access = true;
+                    }
+                }
+                TerrainType::Mountain => {
+                    traits.mountain_tiles += 1;
+                    traits.total_buildable_tiles += 1;
+                }
+            }
+        }
+    }
+    traits.blocked_by_city_spacing = validate_city_spacing(x, y, cities, cfg).is_err();
+    traits
 }
 
 /// Calls `visit(water_tile)` for every water tile immediately bordering a structure footprint.
@@ -311,6 +516,26 @@ pub fn validate_structure_site(
             })
         },
     )
+}
+
+/// Full match validation: footprint + City spacing or City construction radius.
+pub fn validate_match_structure_site(
+    map: &GameMap,
+    owner_id: u16,
+    kind: BuildingKind,
+    tile: u32,
+    existing: &BuildingGrid,
+    cities: &[CityAnchor],
+    required_city_id: Option<u64>,
+    cfg: &GameConfig,
+) -> Result<(), PlacementError> {
+    validate_structure_site(map, owner_id, kind, tile, existing)?;
+    let (x, y) = idx_xy(tile, map.width);
+    if kind == BuildingKind::City {
+        validate_city_spacing(x, y, cities, cfg)
+    } else {
+        validate_district_city_range(owner_id, x, y, cities, required_city_id, cfg)
+    }
 }
 
 fn for_each_valid_land_structure_index(
@@ -509,7 +734,49 @@ pub fn nearest_structure_site_in_bounds(
     y: i32,
     radius: i32,
     existing: &BuildingGrid,
+    bounds: (i32, i32, i32, i32),
+) -> Option<u32> {
+    nearest_site_in_bounds_with(map, x, y, radius, bounds, |tile| {
+        validate_structure_site(map, owner_id, kind, tile, existing).is_ok()
+    })
+}
+
+/// Closest legal foundation obeying City spacing / City radius rules within bounds.
+pub fn nearest_match_structure_site_in_bounds(
+    map: &GameMap,
+    owner_id: u16,
+    kind: BuildingKind,
+    x: i32,
+    y: i32,
+    radius: i32,
+    existing: &BuildingGrid,
+    cities: &[CityAnchor],
+    required_city_id: Option<u64>,
+    cfg: &GameConfig,
+    bounds: (i32, i32, i32, i32),
+) -> Option<u32> {
+    nearest_site_in_bounds_with(map, x, y, radius, bounds, |tile| {
+        validate_match_structure_site(
+            map,
+            owner_id,
+            kind,
+            tile,
+            existing,
+            cities,
+            required_city_id,
+            cfg,
+        )
+        .is_ok()
+    })
+}
+
+fn nearest_site_in_bounds_with(
+    map: &GameMap,
+    x: i32,
+    y: i32,
+    radius: i32,
     (bound_x_min, bound_y_min, bound_x_max, bound_y_max): (i32, i32, i32, i32),
+    is_valid: impl Fn(u32) -> bool,
 ) -> Option<u32> {
     if radius < 0 || map.width == 0 || map.height == 0 {
         return None;
@@ -543,7 +810,7 @@ pub fn nearest_structure_site_in_bounds(
         if best.is_some_and(|current| current <= (distance, tile)) {
             return;
         }
-        if validate_structure_site(map, owner_id, kind, tile, existing).is_ok() {
+        if is_valid(tile) {
             *best = Some((distance, tile));
         }
     };

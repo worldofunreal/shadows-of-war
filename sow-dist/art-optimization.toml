@@ -67,7 +67,7 @@ recipe_version = 2
 
 [profiles.ranked_badges_atlas]
 format = "webp"
-max_width = 2048
+max_width = 2560
 max_height = 1024
 quality = 78
 alpha = "preserve"
@@ -215,14 +215,14 @@ recipe_version = 1
 
 [profiles.atlas_buildings]
 format = "webp"
-max_width = 1024
+max_width = 1056
 max_height = 1024
 quality = 64
 alpha = "preserve"
 alpha_quality = 80
 resample = "mitchell"
 lossless = false
-max_bytes = 200000
+max_bytes = 262144
 recipe_version = 4
 
 [profiles.atlas_badges]

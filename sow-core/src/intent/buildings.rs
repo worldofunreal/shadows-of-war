@@ -1,7 +1,8 @@
 use crate::building::{
-    Building, CityArsenalBuild, city_arsenal_cost_gold,
-    structure_max_affordable_upgrade, structure_multi_upgrade_cost_and_ticks,
-    structure_upgrade_cost_gold, validate_structure_site,
+    Building, CityArsenalBuild, city_anchors_from_buildings, city_arsenal_cost_gold,
+    max_covering_city_level, structure_max_affordable_upgrade,
+    structure_multi_upgrade_cost_and_ticks, structure_upgrade_cost_gold,
+    validate_match_structure_site,
 };
 use crate::engine::SowEngine;
 use crate::game::{BuildingKind, CityArsenalKind, GameEvent, GamePhase, NavalActionFailure, UnitType};
@@ -92,6 +93,27 @@ impl SowEngine {
         )
     }
 
+    /// Maximum level `building` can currently reach (districts cannot exceed their covering City's active level).
+    pub fn building_upgrade_level_cap(&self, building: Building) -> u8 {
+        let kind_cap = building.kind.max_level();
+        if self.legacy_building_rules || building.kind == BuildingKind::City {
+            return kind_cap;
+        }
+        let w = self.state.map.width;
+        if w == 0 {
+            return 0;
+        }
+        let cities = city_anchors_from_buildings(&self.buildings, w);
+        let covering = max_covering_city_level(
+            building.owner_id,
+            building.tile_idx % w,
+            building.tile_idx / w,
+            &cities,
+            &self.state.config,
+        );
+        kind_cap.min(covering)
+    }
+
     /// Cumulative `(cost, total_ticks, any_hero_discount)` to upgrade `building_id` from its
     /// current reserved level through `target_level`.
     pub fn structure_upgrade_to_quote(
@@ -108,8 +130,9 @@ impl SowEngine {
             return None;
         }
         let from_level = self.building_reserved_level(building);
+        let level_cap = self.building_upgrade_level_cap(building);
         if target_level <= from_level
-            || target_level > building.kind.max_level()
+            || target_level > level_cap
             || !self.campaign_allows_building(building.kind, target_level)
         {
             return None;
@@ -147,7 +170,7 @@ impl SowEngine {
             return None;
         }
         let from_level = self.building_reserved_level(building);
-        let mut max_allowed = campaign_max_level.min(building.kind.max_level());
+        let mut max_allowed = campaign_max_level.min(self.building_upgrade_level_cap(building));
         while max_allowed > from_level && !self.campaign_allows_building(building.kind, max_allowed)
         {
             max_allowed -= 1;
@@ -204,7 +227,7 @@ impl SowEngine {
         if !player.alive {
             return;
         }
-        self.refresh_building_aggregates();
+        self.refresh_building_counts_only();
         let Some((level, cost, dur)) = self.foundation_quote(player_id, kind) else {
             return;
         };
@@ -239,12 +262,16 @@ impl SowEngine {
         // Placement is intentionally separate from upgrades. A nearby building
         // never absorbs a new foundation order.
         let spawn_idx = if !self.legacy_building_rules {
-            if validate_structure_site(
+            let cities = city_anchors_from_buildings(&self.buildings, w);
+            if validate_match_structure_site(
                 &self.state.map,
                 player_id,
                 kind,
                 target_tile,
                 &self.building_grid,
+                &cities,
+                None,
+                &self.state.config,
             )
             .is_err()
             {
@@ -354,7 +381,7 @@ impl SowEngine {
         let current_reserved = self.building_reserved_level(building);
         let target_level = requested_target_level.unwrap_or_else(|| current_reserved.saturating_add(1));
         if target_level <= current_reserved
-            || target_level > building.kind.max_level()
+            || target_level > self.building_upgrade_level_cap(building)
             || !self.campaign_allows_building(building.kind, target_level)
         {
             return;
@@ -823,18 +850,13 @@ mod tests {
             }
         }
         let mut engine = SowEngine::new(state, WaterComponents::default());
-        for (kind, x, y) in [
-            (BuildingKind::City, 10, 10),
-            (BuildingKind::City, 14, 10),
-        ] {
-            engine.apply_build_structure_intent(1, kind, y * 32 + x);
-            assert!(
-                engine
-                    .buildings
-                    .iter()
-                    .any(|b| b.kind == kind && b.tile_idx == y * 32 + x && b.level == 1)
-            );
-        }
+        engine.apply_build_structure_intent(1, BuildingKind::City, 10 * 32 + 10);
+        assert!(
+            engine
+                .buildings
+                .iter()
+                .any(|b| b.kind == BuildingKind::City && b.tile_idx == 10 * 32 + 10 && b.level == 1)
+        );
         let max_ticks = engine
             .buildings
             .iter()
@@ -844,14 +866,23 @@ mod tests {
         for _ in 0..max_ticks {
             engine.execute_construction();
         }
-        engine.apply_build_structure_intent(1, BuildingKind::TradingPost, 10 * 32 + 17);
+        // Districts may touch the City footprint without overlapping or upgrading it.
+        engine.apply_build_structure_intent(1, BuildingKind::TradingPost, 10 * 32 + 13);
         assert!(engine.buildings.iter().any(|b| {
-            b.kind == BuildingKind::TradingPost && b.tile_idx == 10 * 32 + 17 && b.level == 1
+            b.kind == BuildingKind::TradingPost && b.tile_idx == 10 * 32 + 13 && b.level == 1
         }));
+        engine.apply_build_structure_intent(1, BuildingKind::Farm, 10 * 32 + 17);
+        assert!(engine.buildings.iter().any(|b| {
+            b.kind == BuildingKind::Farm && b.tile_idx == 10 * 32 + 17 && b.level == 1
+        }));
+        // Founding another City inside exclusion radius is rejected at zero gold cost.
         let gold = engine.state.player(1).unwrap().gold;
-        engine.apply_build_structure_intent(1, BuildingKind::City, 10 * 32 + 13);
+        engine.apply_build_structure_intent(1, BuildingKind::City, 10 * 32 + 15);
         assert_eq!(engine.buildings.len(), 3);
         assert_eq!(engine.state.player(1).unwrap().gold, gold);
+        // Founding a second City outside exclusion radius (dist >= 16) succeeds.
+        engine.apply_build_structure_intent(1, BuildingKind::City, 10 * 32 + 27);
+        assert_eq!(engine.buildings.len(), 4);
         assert!(engine.buildings.iter().all(|b| b.level == 1));
     }
 
@@ -911,9 +942,9 @@ mod tests {
     #[test]
     fn structure_upgrade_charges_the_reduced_price_and_activates_when_finished() {
         let mut game = engine(false);
-        game.buildings.push(building(1, BuildingKind::City, 1));
+        game.buildings.push(building(1, BuildingKind::City, 2));
         game.buildings.push(Building {
-            tile_idx: 1,
+            tile_idx: 3,
             ..building(2, BuildingKind::TradingPost, 1)
         });
         let before = game.state.player(1).unwrap().gold;
@@ -944,7 +975,7 @@ mod tests {
         }));
         game.buildings.push(building(1, BuildingKind::City, 1));
         game.buildings.push(Building {
-            tile_idx: 1,
+            tile_idx: 3,
             ..building(2, BuildingKind::TradingPost, 1)
         });
         game.state.player_mut(1).unwrap().gold = 0.0;
@@ -958,12 +989,12 @@ mod tests {
         assert!(!game.tutorial_city_upgrade_is_free(1, 1));
 
         game.buildings.push(Building {
-            tile_idx: 100,
+            tile_idx: 20,
             ..building(3, BuildingKind::City, 1)
         });
         assert!(!game.tutorial_city_upgrade_is_free(1, 3));
         game.state.player_mut(1).unwrap().gold = 1_000_000.0;
-        let cost = structure_upgrade_cost_gold(BuildingKind::City, 2, 3, &game.state.config);
+        let cost = game.structure_upgrade_quote(3).unwrap().0;
         game.apply_upgrade_structure_intent(1, 3);
         assert!((game.state.player(1).unwrap().gold - (1_000_000.0 - cost)).abs() < 1e-9);
     }
@@ -976,36 +1007,57 @@ mod tests {
     }
 
     #[test]
-    fn trading_post_upgrades_without_a_city_level_requirement() {
+    fn district_upgrades_respect_covering_city_level_cap() {
         let mut game = engine(false);
-        game.buildings.push(building(1, BuildingKind::TradingPost, 1));
+        game.buildings.push(building(1, BuildingKind::City, 1));
+        game.buildings.push(Building {
+            tile_idx: 3,
+            ..building(2, BuildingKind::TradingPost, 1)
+        });
 
-        game.apply_upgrade_structure_intent(1, 1);
-        assert_eq!(game.buildings[0].level, 2);
-        assert!(game.buildings[0].under_construction);
+        // Blocked while covering City is still level 1.
+        game.apply_upgrade_structure_intent(1, 2);
+        assert_eq!(game.buildings[1].level, 1);
+
+        // Allowed once covering City reaches level 2.
+        game.buildings[0].level = 2;
+        game.apply_upgrade_structure_intent(1, 2);
+        assert_eq!(game.buildings[1].level, 2);
+        assert!(game.buildings[1].under_construction);
     }
 
     #[test]
-    fn trading_post_build_order_has_no_city_level_requirement() {
-        let mut game = engine(true);
-        assert!(game.set_campaign_unlocks(crate::campaign::CampaignUnlocks {
-            buildings: std::collections::HashMap::from([(BuildingKind::TradingPost, 1)]),
-            actions: vec![],
-        }));
+    fn district_build_order_requires_covering_city() {
+        let mut game = engine(false);
         game.state.map = crate::map::GameMap::new(32, 32);
         for y in 0..32 {
             for x in 0..32 {
                 game.state.map.set_owner_id(x, y, 1);
             }
         }
-        let trading_post_tile = 16 * 32 + 16;
+        let district_tile = 16 * 32 + 19;
         game.state.player_mut(1).unwrap().tile_count = 32 * 32;
+
+        // Without a City, building a district directly is rejected.
+        game.apply_build_structure_intent(1, BuildingKind::TradingPost, district_tile);
+        assert!(game.buildings.is_empty());
+
+        // Inside an owned active City's radius, building succeeds.
+        game.add_building(Building {
+            id: 1,
+            owner_id: 1,
+            tile_idx: 16 * 32 + 16,
+            kind: BuildingKind::City,
+            level: 1,
+            under_construction: false,
+            ticks_until_complete: 0,
+        });
         let gold = game.state.player(1).unwrap().gold;
-
-        game.apply_build_structure_intent(1, BuildingKind::TradingPost, trading_post_tile);
-
-        assert_eq!(game.buildings.len(), 1);
-        assert_eq!(game.buildings[0].kind, BuildingKind::TradingPost);
+        game.apply_build_structure_intent(1, BuildingKind::TradingPost, district_tile);
+        assert_eq!(game.buildings.len(), 2);
+        assert!(game.buildings.iter().any(|b| {
+            b.kind == BuildingKind::TradingPost && b.tile_idx == district_tile
+        }));
         assert!(game.state.player(1).unwrap().gold < gold);
     }
 
@@ -1105,23 +1157,26 @@ mod tests {
             }
         )));
 
-        game.add_building(building(7, BuildingKind::City, crate::building::NUCLEAR_CITY_LEVEL));
+        game.add_building(building(7, BuildingKind::City, 7));
+        // Level 4 MilitaryCamp cannot launch nukes yet.
+        game.add_building(building(8, BuildingKind::MilitaryCamp, 4));
         game.launch_nuclear_weapon(1, NukeKind::AtomBomb, 4);
         assert!(game.projectiles.is_empty());
         assert!(game.state.events.iter().any(|event| matches!(event,
             crate::game::GameEvent::NuclearActionRejected {
                 player_id: 1,
-                reason: crate::game::NuclearActionFailure::NoReadySilo,
+                reason: crate::game::NuclearActionFailure::CityRequirement,
                 ..
             }
         )));
 
-        let mut silo = building(3, BuildingKind::MissileSilo, 1);
-        silo.under_construction = true;
-        game.add_building(silo);
+        let mut camp = building(3, BuildingKind::MilitaryCamp, 5);
+        camp.under_construction = true;
+        game.add_building(camp);
         game.launch_nuclear_weapon(1, NukeKind::AtomBomb, 4);
         assert!(game.projectiles.is_empty());
-        game.buildings[2].under_construction = false;
+        let camp_pos = game.buildings.iter().position(|b| b.id == 3).unwrap();
+        game.buildings[camp_pos].under_construction = false;
         game.state.player_mut(1).unwrap().gold = 499.0;
         game.launch_nuclear_weapon(1, NukeKind::AtomBomb, 4);
         assert!(game.projectiles.is_empty());
@@ -1134,13 +1189,10 @@ mod tests {
         )));
         game.state.player_mut(1).unwrap().gold = 1000.0;
         game.launch_nuclear_weapon(1, NukeKind::AtomBomb, 4);
-        let city_idx = game.buildings.iter().position(|building| building.id == 7).unwrap();
-        game.buildings[city_idx].under_construction = true;
-        game.launch_nuclear_weapon(1, NukeKind::AtomBomb, 4);
         assert_eq!(game.projectiles.len(), 1);
         assert_eq!(game.state.player(1).unwrap().gold, 500.0);
         assert_eq!(game.nuclear_charges(3, 1), 0);
-        game.buildings[city_idx].under_construction = false;
+        game.state.player_mut(1).unwrap().gold = 500.0;
         game.launch_nuclear_weapon(1, NukeKind::AtomBomb, 4);
         assert_eq!(game.projectiles.len(), 1);
         assert!(game.state.events.iter().any(|event| matches!(event,
@@ -1156,7 +1208,7 @@ mod tests {
         assert_eq!(game.projectiles.len(), 2);
         assert_eq!(game.state.player(1).unwrap().gold, 0.0);
 
-        let mut closer = building(4, BuildingKind::MissileSilo, 2);
+        let mut closer = building(4, BuildingKind::MilitaryCamp, 7);
         closer.tile_idx = 3;
         game.add_building(closer);
         game.projectiles.clear();
@@ -1169,21 +1221,21 @@ mod tests {
         game.launch_nuclear_weapon(1, NukeKind::MIRV, 4);
         assert_eq!(game.state.player(1).unwrap().gold, 0.0);
         assert_eq!(game.nuclear_price(NukeKind::MIRV), 26_667.0);
-        assert_eq!(game.nuclear_charges(4, 2), 0);
+        assert_eq!(game.nuclear_charges(4, 3), 1);
         game.execute_projectiles();
         assert_eq!(game.projectiles[0].kind, crate::game::ProjectileKind::Nuke { level: 4 });
         game.state.tick += 85;
-        assert_eq!(game.nuclear_charges(4, 2), 1);
+        assert_eq!(game.nuclear_charges(4, 3), 2);
         game.state.tick += 5;
-        assert_eq!(game.nuclear_charges(4, 2), 2);
+        assert_eq!(game.nuclear_charges(4, 3), 3);
 
         game.projectiles.clear();
         game.state.player_mut(1).unwrap().gold = 1_000_000.0;
         game.state.map.set_owner_id(1, 1, 1);
         game.state.map.set_owner_id(2, 1, 3);
         game.state.map.terrain[12] = crate::map::MapTile::from_byte(0);
-        game.add_building(building(5, BuildingKind::MissileSilo, 4));
-        game.add_building(building(6, BuildingKind::MissileSilo, 4));
+        game.add_building(building(5, BuildingKind::MilitaryCamp, 7));
+        game.add_building(building(6, BuildingKind::MilitaryCamp, 7));
         for (kind, target) in [
             (NukeKind::AtomBomb, 6),       // Own land
             (NukeKind::AtomBomb, 4),       // Enemy land
@@ -1214,7 +1266,7 @@ mod tests {
         spread_game.state.register_player(spread_enemy);
         let spread_target = 128 * 256 + 128;
         spread_game.state.map.set_owner_id(128, 128, 2);
-        let mut spread_silo = building(1, BuildingKind::MissileSilo, 1);
+        let mut spread_silo = building(1, BuildingKind::MilitaryCamp, 7);
         spread_silo.tile_idx = spread_target;
         spread_game.add_building(spread_silo);
         let mut spread_city = building(2, BuildingKind::City, 4);
@@ -1273,22 +1325,29 @@ mod tests {
         let mut game = SowEngine::new(state, WaterComponents::default());
         assert!(game.set_campaign_unlocks(CampaignUnlocks {
             buildings: HashMap::from([
-                (BuildingKind::MissileSilo, 1),
-                (BuildingKind::City, 4),
+                (BuildingKind::MilitaryCamp, 5),
+                (BuildingKind::City, 5),
             ]),
             actions: vec![CampaignAction::Nuke],
         }));
-        let silo_tile = 5 * 32 + 5;
+        let camp_tile = 7 * 32 + 10;
         let city_tile = 10 * 32 + 10;
 
-        game.apply_build_structure_intent(1, BuildingKind::MissileSilo, silo_tile);
         game.apply_build_structure_intent(1, BuildingKind::City, city_tile);
-        assert_eq!(game.buildings.len(), 2);
         for b in &mut game.buildings {
             b.under_construction = false;
             b.ticks_until_complete = 0;
             if b.kind == BuildingKind::City {
-                b.level = 4;
+                b.level = 5;
+            }
+        }
+        game.apply_build_structure_intent(1, BuildingKind::MilitaryCamp, camp_tile);
+        assert_eq!(game.buildings.len(), 2);
+        for b in &mut game.buildings {
+            b.under_construction = false;
+            b.ticks_until_complete = 0;
+            if b.kind == BuildingKind::MilitaryCamp {
+                b.level = 5;
             }
         }
         let snapshot = game.build_snapshot();
@@ -1470,12 +1529,16 @@ mod tests {
     #[test]
     fn multi_upgrade_quote_matches_sequential_step_costs_and_ownership_scaling() {
         let mut sequential = engine(false);
-        sequential.buildings.push(building(1, BuildingKind::TradingPost, 1));
+        sequential.buildings.push(building(2, BuildingKind::City, 4));
+        sequential.buildings.push(Building {
+            tile_idx: 3,
+            ..building(1, BuildingKind::TradingPost, 1)
+        });
         sequential.state.player_mut(1).unwrap().gold = 10_000.0;
         let start_gold = sequential.state.player(1).unwrap().gold;
         for _ in 0..3 {
             sequential.apply_upgrade_structure_intent(1, 1);
-            let ticks = sequential.buildings[0].ticks_until_complete;
+            let ticks = sequential.buildings[1].ticks_until_complete;
             for _ in 0..ticks {
                 sequential.execute_construction();
             }
@@ -1483,7 +1546,11 @@ mod tests {
         let sequential_spent = start_gold - sequential.state.player(1).unwrap().gold;
 
         let mut bulk = engine(false);
-        bulk.buildings.push(building(1, BuildingKind::TradingPost, 1));
+        bulk.buildings.push(building(2, BuildingKind::City, 4));
+        bulk.buildings.push(Building {
+            tile_idx: 3,
+            ..building(1, BuildingKind::TradingPost, 1)
+        });
         bulk.state.player_mut(1).unwrap().gold = 10_000.0;
         let (bulk_quote, total_ticks, _) = bulk.structure_upgrade_to_quote(1, 4).unwrap();
         assert!((bulk_quote - sequential_spent).abs() < 1e-9);
@@ -1625,5 +1692,74 @@ mod tests {
         legacy.normalize_legacy_warship();
         assert!(legacy.arsenal_build.is_none());
         assert_eq!(legacy.warship_queue.len(), 1);
+    }
+
+    #[test]
+    fn city_radius_expands_on_upgrade_and_tower_lv5_intercepts_with_defense_radius() {
+        let config = GameConfig::default();
+        let mut state = GameState::new(1, 64, 64, config.clone());
+        state.phase = GamePhase::Playing;
+        for (id, x_range) in [(1u16, 0..48u32), (2u16, 48..64u32)] {
+            let mut p = Player::new_human(id, format!("P{id}"), [0.5; 3], &config);
+            p.gold = 100_000.0;
+            p.tile_count = (x_range.end - x_range.start) * 64;
+            state.register_player(p);
+            for y in 0..64 {
+                for x in x_range.clone() {
+                    state.map.set_owner_id(x, y, id);
+                }
+            }
+        }
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        let city_tile = 20 * 64 + 20;
+        engine.apply_build_structure_intent(1, BuildingKind::City, city_tile);
+        assert_eq!(engine.buildings.len(), 1);
+        for _ in 0..BuildingKind::City.construction_duration_ticks() {
+            engine.execute_construction();
+        }
+        // Distance 9 is outside Lv1 City radius (8), so Farm placement fails until City Lv2 (radius 10).
+        let outer_farm = 20 * 64 + 29;
+        engine.apply_build_structure_intent(1, BuildingKind::Farm, outer_farm);
+        assert_eq!(engine.buildings.len(), 1);
+
+        // Upgrade City to Lv5 -> radius expands to 16; Farm at distance 9 succeeds & can reach Lv5.
+        engine.apply_upgrade_structure_to_intent(1, 1, Some(5));
+        let rem = engine.buildings[0].ticks_until_complete;
+        for _ in 0..rem {
+            engine.execute_construction();
+        }
+        for _ in 2..=5 {
+            let t = engine.buildings[0].ticks_until_complete;
+            for _ in 0..t {
+                engine.execute_construction();
+            }
+        }
+        assert_eq!(engine.buildings[0].active_level(), 5);
+        engine.apply_build_structure_intent(1, BuildingKind::Farm, outer_farm);
+        assert_eq!(engine.buildings.len(), 2);
+
+        // Build a Tower at (25, 20) and level to 5: acts as SAM using tower_range_for_level.
+        let tower_tile = 20 * 64 + 25;
+        engine.apply_build_structure_intent(1, BuildingKind::Tower, tower_tile);
+        assert_eq!(engine.buildings.len(), 3);
+        let b_ticks = engine.buildings[2].ticks_until_complete;
+        for _ in 0..b_ticks {
+            engine.execute_construction();
+        }
+        engine.buildings[2].level = 5;
+        engine.refresh_building_aggregates();
+        assert!(engine.building_aggregates[1].count_sam >= 1);
+        assert_eq!(
+            crate::building::cart_stop_multiplier(BuildingKind::TradingPost),
+            1.50
+        );
+        assert_eq!(crate::building::cart_stop_multiplier(BuildingKind::Port), 1.25);
+        assert_eq!(crate::building::cart_stop_multiplier(BuildingKind::City), 1.00);
+        assert_eq!(crate::building::cart_stop_multiplier(BuildingKind::Farm), 0.75);
+        assert_eq!(
+            crate::building::cart_stop_multiplier(BuildingKind::MilitaryCamp),
+            0.50
+        );
+        assert_eq!(crate::building::cart_stop_multiplier(BuildingKind::Tower), 0.25);
     }
 }

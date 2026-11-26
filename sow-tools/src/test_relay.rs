@@ -186,6 +186,7 @@ async fn main() {
             host_config: None,
             password: None,
             ranked_1v1: false,
+            ranked_ffa: false,
         }),
         auth,
     };
@@ -461,6 +462,7 @@ async fn smoke(url: &Url, base: &Url, accounts_file: &std::path::Path) {
             host_config: Some(Box::new(config)),
             password: None,
             ranked_1v1: false,
+            ranked_ffa: false,
         }),
         auth: AuthProof {
             provider: "anonymous".into(),

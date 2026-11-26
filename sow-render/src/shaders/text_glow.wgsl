@@ -488,6 +488,15 @@ fn shade_building_marker(in: VertexOutput) -> vec4<f32> {
     );
     let tex = textureSample(building_atlas, building_sampler, art_uv);
 
+    let icon_local = p / (0.68 * icon_fill) + vec2<f32>(0.5, 0.5);
+    let icon_in_bounds = step(0.0, icon_local.x) * step(icon_local.x, 1.0)
+        * step(0.0, icon_local.y) * step(icon_local.y, 1.0);
+    let icon_uv = vec2<f32>(
+        mix(in.underlay_offset_y, in.underlay_softness, clamp(icon_local.x, 0.0, 1.0)),
+        clamp(icon_local.y, 0.0, 1.0),
+    );
+    let icon_tex = textureSample(status_atlas, status_sampler, icon_uv);
+
     let fill_darken = globals.shader_params[__TEXT_LOD_BUILDING_FILL_DARKEN__].x;
     let border_darken = globals.shader_params[__TEXT_LOD_BUILDING_BORDER_DARKEN__].x;
     let glyph_darken = globals.shader_params[__TEXT_LOD_BUILDING_GLYPH_DARKEN__].x;
@@ -500,14 +509,14 @@ fn shade_building_marker(in: VertexOutput) -> vec4<f32> {
     let inner_mask = 1.0 - smoothstep(-fw, fw, sdf + border_w);
     var badge_rgb = mix(border_rgb, fill_rgb, inner_mask);
 
-    // Inner silhouette glyph in mid-zoom tactical badge mode.
+    // Dedicated LOD icon glyph sampled from status_atlas in mid-zoom tactical badge mode.
     let fill_lum = dot(fill_rgb, vec3<f32>(0.299, 0.587, 0.114));
     let glyph_rgb = select(
         scale_rgb_value(fill_rgb, glyph_darken),
         vec3<f32>(0.96, 0.97, 0.99),
         fill_lum < 0.25,
     );
-    let glyph_mask = tex.a * art_in_bounds * inner_mask * glyph_alpha;
+    let glyph_mask = icon_tex.a * icon_in_bounds * inner_mask * glyph_alpha;
     badge_rgb = mix(badge_rgb, glyph_rgb, glyph_mask);
 
     // Subtle concentric outer rim indicating dense same-owner neighbors were thinned here.

@@ -71,7 +71,7 @@ pub(crate) fn building_metrics(
     let city_gold_level_weight = sow_core::building::city_gold_level_weight(level);
     let capacity_level_weight = sow_core::building::city_capacity_level_weight(level);
     let district_capacity =
-        config.district_max_troops * sow_core::building::district_capacity_level_weight(level);
+        config.district_max_troops * sow_core::building::district_capacity_weight_for_kind(kind, level);
     let level = f64::from(level);
     let per_second = config.global_speed_multiplier;
     let hero =
@@ -176,13 +176,14 @@ pub(crate) fn building_metrics(
             metrics
         }
         BuildingKind::Tower => {
+            let lvl_u8 = level as u8;
             let range = f64::from(sow_core::building::tower_range_for_level(
-                level as u8,
+                lvl_u8,
                 config,
                 leader.tower_range_multiplier(),
             ));
-            let defense_weight = sow_core::building::tower_defense_weight(level as u8, config);
-            let stats = vec![
+            let defense_weight = sow_core::building::tower_defense_weight(lvl_u8, config);
+            let mut stats = vec![
                 BuildingMetric::new(
                     Icon::Shield,
                     (defense_weight * config.tower_strength).clamp(0.0, 0.50)
@@ -193,44 +194,75 @@ pub(crate) fn building_metrics(
                 ),
                 BuildingMetric::new(
                     Icon::Shield,
-                    sow_core::building::tower_capture_weight(level as u8),
+                    sow_core::building::tower_capture_weight(lvl_u8),
                     "×",
                     "",
                 ),
                 BuildingMetric::new(Icon::Range, range, "", ""),
             ];
+            if lvl_u8 >= 5 {
+                stats.push(BuildingMetric::new(
+                    Icon::Shield,
+                    f64::from(lvl_u8.saturating_sub(4)),
+                    "SAM ×",
+                    "",
+                ));
+            }
             stats
         }
-        BuildingKind::MilitaryCamp => vec![
+        BuildingKind::Farm => vec![
             BuildingMetric::new(
                 Icon::Troops,
-                config.military_camp_troop_income
-                    * sow_core::building::military_camp_troop_level_weight(level as u8)
-                    * hero(District::MilitaryCamp, Resource::Troops)
+                config.farm_troop_income
+                    * sow_core::building::farm_troop_level_weight(level as u8)
+                    * hero(District::Farm, Resource::Troops)
                     * per_second,
                 "+",
                 "/s",
             ),
             BuildingMetric::new(
                 Icon::Gold,
-                config.military_camp_gold_income
-                    * sow_core::building::military_camp_gold_level_weight(level as u8)
-                    * hero(District::MilitaryCamp, Resource::Gold)
+                config.farm_gold_income
+                    * sow_core::building::farm_gold_level_weight(level as u8)
+                    * hero(District::Farm, Resource::Gold)
                     * per_second,
                 "+",
                 "/s",
             ),
-            BuildingMetric::new(
-                Icon::Speed,
-                (sow_core::building::camp_conquest_multiplier(
-                    sow_core::building::camp_capture_level_weight(level as u8)
-                        * config.camp_capture_base_points.max(0.0),
-                ) - 1.0)
-                    * 100.0,
-                "+",
-                "%",
-            ),
         ],
+        BuildingKind::MilitaryCamp => {
+            let lvl_u8 = level as u8;
+            let mut stats = vec![
+                BuildingMetric::new(
+                    Icon::Troops,
+                    config.military_camp_troop_income
+                        * sow_core::building::military_camp_troop_level_weight(lvl_u8)
+                        * hero(District::MilitaryCamp, Resource::Troops)
+                        * per_second,
+                    "+",
+                    "/s",
+                ),
+                BuildingMetric::new(
+                    Icon::Speed,
+                    (sow_core::building::camp_conquest_multiplier(
+                        sow_core::building::camp_capture_level_weight(lvl_u8)
+                            * config.camp_capture_base_points.max(0.0),
+                    ) - 1.0)
+                        * 100.0,
+                    "+",
+                    "%",
+                ),
+            ];
+            if lvl_u8 >= 5 {
+                stats.push(BuildingMetric::new(
+                    Icon::Radiation,
+                    f64::from(lvl_u8.saturating_sub(4)),
+                    "Nuke ×",
+                    "",
+                ));
+            }
+            stats
+        }
         BuildingKind::MissileSilo => vec![BuildingMetric::new(Icon::Shield, level, "×", "")],
         BuildingKind::SAM => {
             let mut stats = vec![BuildingMetric::new(
@@ -622,8 +654,24 @@ impl crate::app::SowApp {
                 progress,
             });
         }
-        // Maxed or campaign-locked levels hide the button, as the radial hides them.
-        if next_level > building.kind.max_level()
+        // Maxed, city-level-capped, or campaign-locked levels hide the upgrade button.
+        let city_cap = if building.kind.is_non_city() && self.sim.map_w > 0 {
+            let cities = sow_core::building::city_anchors_from_snapshots(
+                &snapshot.buildings,
+                self.sim.map_w,
+            );
+            sow_core::building::max_covering_city_level(
+                building.owner_id,
+                building.tile_idx % self.sim.map_w,
+                building.tile_idx / self.sim.map_w,
+                &cities,
+                config,
+            )
+            .min(building.kind.max_level())
+        } else {
+            building.kind.max_level()
+        };
+        if next_level > city_cap
             || next_level > self.campaign_building_max_level(building.kind)
         {
             return Some(BuildingPanel {
@@ -668,7 +716,7 @@ impl crate::app::SowApp {
                     self.sim.engine.as_ref().and_then(|engine| {
                         let cap = self
                             .campaign_building_max_level(building.kind)
-                            .min(building.kind.max_level());
+                            .min(city_cap);
                         let (target, total_cost, ticks) = engine.max_affordable_upgrade_level(
                             building.id,
                             self.current_player_gold(),

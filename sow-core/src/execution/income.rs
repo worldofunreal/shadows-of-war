@@ -42,29 +42,32 @@ impl SowEngine {
             let Some(mut progress) = self.trade_route_progress.get(index).copied() else {
                 continue;
             };
+            if progress.next_arrival_tick != due {
+                continue;
+            }
             let last_station = link.station_path.len().saturating_sub(1);
             if last_station == 0 {
                 continue;
             }
             let station_index = usize::from(progress.next_station_index).min(last_station);
-            // Stop payments are made on the outward leg only, matching OpenFront.
-            if !progress.returning {
+            // Stop payments are made on the outward leg only; every active district
+            // and city scales the stop payment by its cart stop multiplier.
+            if !progress.returning && station_index > 0 {
                 let station_id = link.station_path[station_index];
                 if let Ok(position) = self
                     .trade_stations
                     .binary_search_by_key(&station_id, |station| station.id)
                 {
                     let station = self.trade_stations[position];
-                    if matches!(
-                        station.kind,
-                        crate::game::BuildingKind::City | crate::game::BuildingKind::Port
-                    ) {
+                    let mult = crate::building::cart_stop_multiplier(station.kind);
+                    if mult > 0.0 {
                         let stop_count = usize::from(link.station_stop_count);
                         let gold = if stop_count == 0 {
                             0.0
                         } else {
-                            crate::building::RAILWAY_STOP_GOLD.min(
-                                crate::building::RAILWAY_STOP_GOLD_PER_TRIP_CAP / stop_count as f64,
+                            (crate::building::RAILWAY_STOP_GOLD * mult).min(
+                                crate::building::RAILWAY_STOP_GOLD_PER_TRIP_CAP * mult
+                                    / stop_count as f64,
                             )
                         };
                         if gold > 0.0 {
@@ -204,8 +207,8 @@ impl SowEngine {
                                     next_arrival_tick: u64::MAX,
                                     ..Default::default()
                                 };
+                            self.railway_routes_dirty = true;
                         }
-                        self.railway_routes_dirty = true;
                         self.building_aggregates_dirty = true;
                         continue;
                     }
@@ -661,7 +664,7 @@ mod zero_troop_bot_income_tests {
             .iter()
             .find(|link| link.from_building_id == 1)
             .unwrap();
-        assert_eq!(first_route.station_stop_count, 2);
+        assert_eq!(first_route.station_stop_count, 3);
         let second_route = engine
             .railway_links
             .iter()
@@ -711,7 +714,7 @@ mod zero_troop_bot_income_tests {
         let other_post_tile = 8 * 24 + 8;
         assert_eq!(
             events.len(),
-            9,
+            11,
             "period={period}, progress={:?}, events={events:?}",
             engine.trade_route_progress
         );
@@ -738,7 +741,7 @@ mod zero_troop_bot_income_tests {
                 .iter()
                 .filter(|event| event.0 == 1
                     && event.1 == port_tile
-                    && (event.2 - 2.0).abs() < 1e-6)
+                    && (event.2 - 2.5).abs() < 1e-6)
                 .count(),
             1
         );
@@ -747,7 +750,7 @@ mod zero_troop_bot_income_tests {
                 .iter()
                 .filter(|event| event.0 == 2
                     && event.1 == port_tile
-                    && (event.2 - 2.0).abs() < 1e-6)
+                    && (event.2 - 2.5).abs() < 1e-6)
                 .count(),
             1
         );
@@ -756,9 +759,27 @@ mod zero_troop_bot_income_tests {
                 .iter()
                 .filter(|event| event.0 == 3
                     && event.1 == port_tile
-                    && (event.2 - 2.0).abs() < 1e-6)
+                    && (event.2 - 2.5).abs() < 1e-6)
                 .count(),
             2
+        );
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| event.0 == 1
+                    && event.1 == other_post_tile
+                    && (event.2 - 3.0).abs() < 1e-6)
+                .count(),
+            1
+        );
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| event.0 == 2
+                    && event.1 == other_post_tile
+                    && (event.2 - 3.0).abs() < 1e-6)
+                .count(),
+            1
         );
         let cargo = events
             .iter()

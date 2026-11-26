@@ -678,6 +678,11 @@ impl SowApp {
                         );
                     }
                 }
+                sow_core::game::GameEvent::FleetNuked { fleet_id, .. } => {
+                    if crate::theme::dev_config::DevConfig::with(|dev| dev.vfx_blasts) {
+                        self.ui.blast_scene.push_pending_nuked_fleet(fleet_id);
+                    }
+                }
                 sow_core::game::GameEvent::TacticalSurge {
                     player_id,
                     tile_x,

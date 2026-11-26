@@ -60,6 +60,10 @@ fn default_military_camp_troop_income() -> f64 {
     60.0 / NORMAL_GAME_SPEED
 }
 
+fn default_farm_troop_income() -> f64 {
+    45.0 / NORMAL_GAME_SPEED
+}
+
 fn default_city_gold_income() -> f64 {
     0.45 / NORMAL_GAME_SPEED
 }
@@ -77,7 +81,19 @@ fn default_hero_structure_troop_income() -> f64 {
 }
 
 fn default_military_camp_gold_income() -> f64 {
-    0.25 / NORMAL_GAME_SPEED
+    0.0
+}
+
+fn default_farm_gold_income() -> f64 {
+    0.55 / NORMAL_GAME_SPEED
+}
+
+fn default_city_base_radius() -> u32 {
+    8
+}
+
+fn default_city_radius_per_level() -> u32 {
+    2
 }
 
 fn default_port_gold_income() -> f64 {
@@ -126,6 +142,10 @@ fn default_structure_upgrade_scale() -> f64 {
 
 fn default_cost_military_camp() -> f64 {
     85.0
+}
+
+fn default_cost_farm() -> f64 {
+    70.0
 }
 
 fn default_cost_sam() -> f64 {
@@ -493,14 +513,24 @@ pub struct GameConfig {
     pub city_gold_income: f64,
     /// Troop income per game second per weighted MilitaryCamp level.
     #[serde(default = "default_military_camp_troop_income")]
-    #[serde(alias = "farm_troop_income")]
     pub military_camp_troop_income: f64,
+    /// Troop income per game second per weighted Farm level.
+    #[serde(default = "default_farm_troop_income")]
+    pub farm_troop_income: f64,
     #[serde(default = "default_camp_capture_base_points")]
     pub camp_capture_base_points: f64,
-    /// Gold income per game second added per weighted MilitaryCamp level.
+    /// Gold income per game second added per weighted MilitaryCamp level (0 by default).
     #[serde(default = "default_military_camp_gold_income")]
-    #[serde(alias = "farm_gold_income")]
     pub military_camp_gold_income: f64,
+    /// Gold income per game second added per weighted Farm level.
+    #[serde(default = "default_farm_gold_income")]
+    pub farm_gold_income: f64,
+    /// Base district build radius around a level-1 City in tiles.
+    #[serde(default = "default_city_base_radius")]
+    pub city_base_radius: u32,
+    /// Additional radius tiles unlocked per City upgrade above level 1.
+    #[serde(default = "default_city_radius_per_level")]
+    pub city_radius_per_level: u32,
     /// Defense range/radius of each Tower.
     pub tower_range: f64,
     /// Extra attack frontier priority per Tower within range.
@@ -549,8 +579,11 @@ pub struct GameConfig {
     /// Gold cost to place a Port.
     pub cost_port: f64,
     /// Gold cost to place a MilitaryCamp.
-    #[serde(default = "default_cost_military_camp", alias = "cost_farm")]
+    #[serde(default = "default_cost_military_camp")]
     pub cost_military_camp: f64,
+    /// Gold cost to place a Farm.
+    #[serde(default = "default_cost_farm")]
+    pub cost_farm: f64,
     /// Gold cost to place a SAM battery.
     #[serde(default = "default_cost_sam")]
     pub cost_sam: f64,
@@ -723,8 +756,12 @@ impl Default for GameConfig {
             city_troop_income: default_city_troop_income(),
             city_gold_income: default_city_gold_income(),
             military_camp_troop_income: default_military_camp_troop_income(),
+            farm_troop_income: default_farm_troop_income(),
             camp_capture_base_points: default_camp_capture_base_points(),
             military_camp_gold_income: default_military_camp_gold_income(),
+            farm_gold_income: default_farm_gold_income(),
+            city_base_radius: default_city_base_radius(),
+            city_radius_per_level: default_city_radius_per_level(),
             tower_range: 6.0,
             tower_priority: 120.0,
             tower_strength: 0.05,
@@ -743,6 +780,7 @@ impl Default for GameConfig {
             cost_trading_post: 75.0,
             cost_port: 90.0,
             cost_military_camp: default_cost_military_camp(),
+            cost_farm: default_cost_farm(),
             cost_sam: default_cost_sam(),
             first_economic_structure_cost: None,
             progressive_defense_upgrades: true,

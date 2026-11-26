@@ -138,6 +138,8 @@ struct BuildingLod {
     quantized_zoom: f32,
     sprite_zoom: f32,
     dot_zoom: f32,
+    district_zoom: f32,
+    show_districts: bool,
     icon_px: f32,
     dot_px: f32,
     min_spacing_px: f32,
@@ -164,10 +166,25 @@ fn smoothstep_lod(edge0: f32, edge1: f32, x: f32) -> f32 {
 }
 
 #[inline]
+fn building_lod_icon(kind: BuildingKind, level: u8) -> NameplateStatusSprite {
+    match kind {
+        BuildingKind::City => NameplateStatusSprite::LodCity,
+        BuildingKind::Tower if level >= 5 => NameplateStatusSprite::LodSam,
+        BuildingKind::Tower => NameplateStatusSprite::LodTower,
+        BuildingKind::TradingPost | BuildingKind::Farm => NameplateStatusSprite::LodTradingPost,
+        BuildingKind::Port => NameplateStatusSprite::LodPort,
+        BuildingKind::MilitaryCamp if level >= 5 => NameplateStatusSprite::LodSilo,
+        BuildingKind::MilitaryCamp => NameplateStatusSprite::LodMilitaryCamp,
+        BuildingKind::SAM => NameplateStatusSprite::LodSam,
+        BuildingKind::MissileSilo => NameplateStatusSprite::LodSilo,
+    }
+}
+
+#[inline]
 fn building_marker_shape(kind: BuildingKind) -> BuildingMarkerShape {
     match kind {
         BuildingKind::City => BuildingMarkerShape::Circle,
-        BuildingKind::MissileSilo => BuildingMarkerShape::Triangle,
+        BuildingKind::MissileSilo | BuildingKind::Farm => BuildingMarkerShape::Triangle,
         BuildingKind::SAM => BuildingMarkerShape::Square,
         BuildingKind::Port => BuildingMarkerShape::Pentagon,
         BuildingKind::TradingPost => BuildingMarkerShape::Hexagon,
@@ -183,6 +200,7 @@ fn building_shape_scale(kind: BuildingKind) -> f32 {
         BuildingKind::City => 1.22,
         BuildingKind::Port | BuildingKind::TradingPost => 1.08,
         BuildingKind::SAM | BuildingKind::MilitaryCamp => 1.05,
+        BuildingKind::Farm => 1.04,
         BuildingKind::Tower => 1.0,
     }
 }
@@ -202,11 +220,12 @@ fn building_icon_fill(kind: BuildingKind) -> f32 {
 #[inline]
 fn building_priority_rank(kind: BuildingKind) -> u8 {
     match kind {
-        BuildingKind::MissileSilo => 6,
-        BuildingKind::City => 5,
-        BuildingKind::SAM => 4,
-        BuildingKind::Port => 3,
-        BuildingKind::TradingPost => 2,
+        BuildingKind::MissileSilo => 7,
+        BuildingKind::City => 6,
+        BuildingKind::SAM => 5,
+        BuildingKind::Port => 4,
+        BuildingKind::TradingPost => 3,
+        BuildingKind::Farm => 2,
         BuildingKind::Tower => 1,
         BuildingKind::MilitaryCamp => 0,
     }
@@ -231,11 +250,14 @@ impl BuildingLod {
         let zoom = zoom_scaled.max(BUILDING_CULL_FLOOR);
         let band = (zoom.log2() * BUILDING_ZOOM_STEPS_PER_OCTAVE).floor() as i16;
         let quantized_zoom = 2.0_f32.powf(band as f32 / BUILDING_ZOOM_STEPS_PER_OCTAVE);
+        let district_zoom = setting("lod.building.district_zoom").max(0.0);
         Self {
             band,
             quantized_zoom,
             sprite_zoom: setting("lod.building.sprite_zoom").max(2.0),
             dot_zoom: setting("lod.building.dot_zoom").max(0.0),
+            district_zoom,
+            show_districts: zoom_scaled >= district_zoom,
             icon_px: setting("lod.building.icon_px").max(8.0),
             dot_px: setting("lod.building.dot_px").max(6.0),
             min_spacing_px: setting("lod.building.min_spacing_px").max(0.0),
@@ -693,10 +715,12 @@ fn render_buildings(
                 } else {
                     0.0
                 };
+                let icon_uv_rect = building_lod_icon(building.kind, building.level).uv_rect();
                 text.push_building_marker(BuildingMarkerInstance {
                     center: animated_center,
                     size: animated_size,
                     uv_rect,
+                    icon_uv: [icon_uv_rect[0], icon_uv_rect[2]],
                     fill_color: [fill_rgb[0], fill_rgb[1], fill_rgb[2], alpha],
                     border_color: border_rgb,
                     shape: building_marker_shape(building.kind),
@@ -710,7 +734,10 @@ fn render_buildings(
             }
         }
 
-        if is_pure_sprite && building.kind == BuildingKind::MissileSilo {
+        if is_pure_sprite
+            && (building.kind == BuildingKind::MissileSilo
+                || (building.kind == BuildingKind::MilitaryCamp && building.level >= 5))
+        {
             text.push_status_sprite(
                 NameplateStatusSprite::Radiation,
                 building_center,
@@ -819,7 +846,9 @@ fn render_buildings(
                         uv_rect,
                         tint,
                     );
-                    if building.kind == BuildingKind::MissileSilo {
+                    if building.kind == BuildingKind::MissileSilo
+                        || (building.kind == BuildingKind::MilitaryCamp && building.level >= 5)
+                    {
                         let marker_extent = marker_size[0].max(marker_size[1]);
                         text.push_status_sprite(
                             NameplateStatusSprite::Radiation,
@@ -836,6 +865,7 @@ fn render_buildings(
                         building.kind,
                         BuildingKind::City
                             | BuildingKind::MissileSilo
+                            | BuildingKind::MilitaryCamp
                             | BuildingKind::Port
                             | BuildingKind::SAM
                     );
@@ -1468,6 +1498,17 @@ fn render_building_selection_focus(
         core_glow,
     );
 
+    if kind == BuildingKind::City {
+        let city_radius =
+            sow_core::building::city_construction_radius(level.max(1), &sim.config) as f32 * zoom;
+        text.push_ring(
+            anchor_center,
+            city_radius,
+            [0.32, 0.88, 0.68, 0.34],
+            (1.6 * sf).max(1.0),
+        );
+    }
+
     let tower_level = snapshot_buildings
         .iter()
         .find(|b| b.tile_idx == menu.tile_idx && b.kind == BuildingKind::Tower)
@@ -1500,6 +1541,14 @@ fn render_building_selection_focus(
             [0.91, 0.71, 0.34, 0.30],
             (1.4 * sf).max(1.0),
         );
+        if tower_level >= 5 {
+            text.push_ring(
+                anchor_center,
+                range as f32 * zoom,
+                [0.35, 0.85, 0.98, 0.35],
+                (1.6 * sf).max(1.0),
+            );
+        }
     }
     let sam_level = snapshot_buildings
         .iter()
@@ -1710,14 +1759,33 @@ fn render_building_placement_preview(
         return;
     }
     let my_id = sim.my_player_id.unwrap_or(0);
-    let site_legal = sow_core::building::validate_structure_site(
-        map,
-        my_id,
-        kind,
-        placement.tile_idx,
-        &engine.building_grid,
-    )
-    .is_ok();
+    let cities = if engine.legacy_building_rules {
+        Vec::new()
+    } else {
+        sow_core::building::city_anchors_from_buildings(&engine.buildings, map.width)
+    };
+    let site_legal = if engine.legacy_building_rules {
+        sow_core::building::validate_structure_site(
+            map,
+            my_id,
+            kind,
+            placement.tile_idx,
+            &engine.building_grid,
+        )
+        .is_ok()
+    } else {
+        sow_core::building::validate_match_structure_site(
+            map,
+            my_id,
+            kind,
+            placement.tile_idx,
+            &engine.building_grid,
+            &cities,
+            placement.city_id,
+            &engine.state.config,
+        )
+        .is_ok()
+    };
     let (tile_x, tile_y) = (
         placement.tile_idx % map.width,
         placement.tile_idx / map.width,
@@ -1777,6 +1845,54 @@ fn render_building_placement_preview(
     let sprite_center = [center_px[0], center_px[1] - lift];
     if let Some(uv_rect) = crate::render::gpu::building_sprite_uv(kind, 1) {
         text.push_building_sprite(sprite_center, sprite_size, uv_rect, colors.building);
+    }
+    if kind == BuildingKind::City {
+        let initial_radius =
+            sow_core::building::city_construction_radius(1, &sim.config) as f32 * input.camera_zoom;
+        text.push_ring(
+            center_px,
+            initial_radius,
+            [0.42, 0.92, 0.72, 0.32],
+            (1.5 * sf).max(1.0),
+        );
+        for city in &cities {
+            let excl = sow_core::building::city_exclusion_radius(
+                city.active_level.max(city.level).max(1),
+                &sim.config,
+            );
+            let dx = tile_x.abs_diff(city.x);
+            let dy = tile_y.abs_diff(city.y);
+            if dx * dx + dy * dy < excl * excl {
+                let c_screen = input.world_to_screen([city.x as f32 + 0.5, city.y as f32 + 0.5]);
+                text.push_ring(
+                    c_screen,
+                    excl as f32 * input.camera_zoom,
+                    [0.95, 0.28, 0.28, 0.34],
+                    (1.5 * sf).max(1.0),
+                );
+            }
+        }
+    } else if !engine.legacy_building_rules {
+        let anchor_city = placement.city_id.and_then(|cid| {
+            cities.iter().find(|c| c.id == cid && c.owner_id == my_id)
+        }).or_else(|| {
+            cities.iter().find(|c| {
+                c.owner_id == my_id
+                    && sow_core::building::city_covers_coord(**c, tile_x, tile_y, &sim.config)
+            })
+        });
+        if let Some(city) = anchor_city {
+            let c_screen = input.world_to_screen([city.x as f32 + 0.5, city.y as f32 + 0.5]);
+            let range =
+                sow_core::building::city_construction_radius(city.active_level, &sim.config) as f32
+                    * input.camera_zoom;
+            text.push_ring(
+                c_screen,
+                range,
+                [0.32, 0.88, 0.68, 0.34],
+                (1.6 * sf).max(1.0),
+            );
+        }
     }
     if kind == BuildingKind::Tower {
         let range_multiplier = engine
@@ -1901,6 +2017,13 @@ fn collect_buildings(
                 || cache.under_construction_tiles.contains(&building.tile_idx));
         let keep_local_progress = building.owner_id == my_id
             && (building.under_construction || has_active_city_build);
+        if !lod.show_districts
+            && building.kind.is_non_city()
+            && selected_tile != Some(building.tile_idx)
+            && !keep_local_progress
+        {
+            continue;
+        }
         let [bx, by] = building_world_center(building.kind, building.tile_idx, map_w);
         let owner_rgb = cache
             .owner_colors

@@ -16,6 +16,7 @@ pub fn structure_build_cost_gold(kind: BuildingKind, built_levels: u32, cfg: &Ga
         BuildingKind::TradingPost => cfg.cost_trading_post,
         BuildingKind::Port => cfg.cost_port,
         BuildingKind::MilitaryCamp => cfg.cost_military_camp,
+        BuildingKind::Farm => cfg.cost_farm,
         BuildingKind::SAM => cfg.cost_sam,
         BuildingKind::MissileSilo => 375.0,
     };
@@ -35,6 +36,7 @@ pub fn structure_upgrade_cost_gold(
     }
     let first_upgrade_cost = match kind {
         BuildingKind::City | BuildingKind::MilitaryCamp | BuildingKind::TradingPost => 110.0,
+        BuildingKind::Farm => 100.0,
         BuildingKind::Port => 120.0,
         BuildingKind::Tower => 80.0,
         BuildingKind::SAM => 700.0,

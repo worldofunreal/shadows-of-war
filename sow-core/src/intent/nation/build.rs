@@ -1,4 +1,4 @@
-use crate::building::find_structure_site_near;
+use crate::building::{city_anchors_from_buildings, find_structure_site_near};
 use crate::engine::SowEngine;
 use crate::game::BuildingKind;
 use crate::protocol::GameplayIntent;
@@ -7,6 +7,7 @@ use crate::rng::NextIntExt;
 use super::profile::{AiSlot, AiTier, BotDecision, BotDecisionKind};
 use super::structures::{
     PLACEMENT_ATTEMPTS, StructureCandidates, bot_structure_target_count, cheapest_gold_cost,
+    find_city_site_from_candidates, find_district_site_in_owned_cities,
     resolve_military_camp_from_candidates, resolve_structure_from_candidates, stack_build_decision,
 };
 
@@ -17,6 +18,7 @@ impl SowEngine {
         bot_id: u16,
         bot_iq: u32,
         build_cost: f64,
+        shared: &super::AiTickShared,
         decisions: &mut Vec<BotDecision>,
     ) {
         // ── Structure building (IQ-scaled, all bots) ─────────────────
@@ -37,68 +39,122 @@ impl SowEngine {
                         .unwrap_or_default();
                     let city_equivalent = (player_tile_count / 1000).max(1);
 
-                    let has_enemy_nuclear_capability = self.buildings.iter().any(|building| {
-                        building.owner_id != bot_id
-                            && !crate::execution::hero_effects::allied(
-                                &self.state,
-                                bot_id,
-                                building.owner_id,
-                            )
-                            && !building.under_construction
-                            && building.kind == BuildingKind::MissileSilo
-                            && building.active_level() > 0
-                    });
+                    let has_enemy_nuclear_capability =
+                        shared.silo_owners.iter().any(|&owner_id| {
+                            owner_id != bot_id
+                                && !crate::execution::hero_effects::allied(
+                                    &self.state,
+                                    bot_id,
+                                    owner_id,
+                                )
+                        });
                     let sam_defense_enabled = bot_iq >= 100
                         && has_enemy_nuclear_capability
-                        && self.foundation_quote(bot_id, BuildingKind::SAM).is_some();
+                        && self.campaign_allows_building(BuildingKind::Tower, 5);
                     let mut all_owned_buildings_covered = false;
-                    if sam_defense_enabled {
-                        let sams: Vec<_> = self.buildings.iter()
-                            .filter(|sam| {
-                                sam.owner_id == bot_id
-                                    && sam.kind == BuildingKind::SAM
-                                    && (sam.active_level() > 0 || sam.under_construction)
+                    if sam_defense_enabled && !self.legacy_building_rules {
+                        let width = self.state.map.width.max(1);
+                        let sams: Vec<_> = self
+                            .buildings
+                            .iter()
+                            .filter(|t| {
+                                t.owner_id == bot_id
+                                    && t.kind == BuildingKind::Tower
+                                    && t.active_level() >= 5
                             })
-                            .map(|sam| (sam.tile_idx, sam.active_level().max(1)))
+                            .map(|t| (t.tile_idx, t.active_level()))
                             .collect();
                         all_owned_buildings_covered = true;
-                        let mut sam_site = None;
-                        const MAX_SAM_SITE_SEARCHES_PER_THINK: usize = 8;
-                        let mut sam_searches = 0usize;
+                        let mut uncovered_tile = None;
                         for building in self.buildings.iter().filter(|b| b.owner_id == bot_id) {
                             let covered = sams.iter().any(|&(tile, level)| {
-                                crate::execution::sam::sam_covers_tile(
-                                    tile,
-                                    building.tile_idx,
-                                    self.state.map.width,
+                                let range = crate::building::tower_range_for_level(
                                     level,
+                                    &self.state.config,
+                                    1.0,
                                 )
+                                .max(0) as u32;
+                                crate::execution::sam::sam_tile_distance(tile, building.tile_idx, width)
+                                    <= range
                             });
-                            if covered {
-                                continue;
-                            }
-                            all_owned_buildings_covered = false;
-                            if sam_site.is_none() && sam_searches < MAX_SAM_SITE_SEARCHES_PER_THINK {
-                                sam_searches += 1;
-                                sam_site = find_structure_site_near(
-                                    &self.state.map,
-                                    bot_id,
-                                    building.tile_idx,
-                                    BuildingKind::SAM,
-                                    &self.building_grid,
-                                    &mut self.placement_scratch,
-                                    self.legacy_building_rules,
-                                );
-                                if sam_site.is_some() {
-                                    break;
-                                }
-                            } else if sam_searches >= MAX_SAM_SITE_SEARCHES_PER_THINK {
-                                break;
+                            if !covered {
+                                all_owned_buildings_covered = false;
+                                uncovered_tile.get_or_insert(building.tile_idx);
                             }
                         }
-                        if let Some(sam_site) = sam_site {
-                            if self.foundation_quote(bot_id, BuildingKind::SAM)
-                                .is_some_and(|(_, cost, _)| player_gold >= cost)
+                        if let Some(target) = uncovered_tile {
+                            if let Some(upgrade_tower) = self
+                                .buildings
+                                .iter()
+                                .filter(|b| {
+                                    b.owner_id == bot_id
+                                        && b.kind == BuildingKind::Tower
+                                        && !b.under_construction
+                                        && b.level < 5
+                                })
+                                .min_by_key(|b| {
+                                    crate::execution::sam::sam_tile_distance(b.tile_idx, target, width)
+                                })
+                                .copied()
+                            {
+                                let cap = self.building_upgrade_level_cap(upgrade_tower);
+                                if upgrade_tower.level < cap {
+                                    let (cost, _) = self.paid_structure_upgrade_quote(upgrade_tower);
+                                    if player_gold >= cost {
+                                        if let Some(player) = self.state.player_mut(bot_id) {
+                                            player.iq_points = (player.iq_points - build_cost).max(0.0);
+                                        }
+                                        decisions.push(BotDecision {
+                                            bot_id,
+                                            kind: BotDecisionKind::Build,
+                                            intent: GameplayIntent::UpgradeStructure {
+                                                building_id: upgrade_tower.id,
+                                            },
+                                        });
+                                        return;
+                                    }
+                                } else if let Some(city) = self
+                                    .buildings
+                                    .iter()
+                                    .filter(|c| {
+                                        c.owner_id == bot_id
+                                            && c.kind == BuildingKind::City
+                                            && !c.under_construction
+                                            && c.level < 5
+                                    })
+                                    .min_by_key(|c| {
+                                        crate::execution::sam::sam_tile_distance(
+                                            c.tile_idx,
+                                            upgrade_tower.tile_idx,
+                                            width,
+                                        )
+                                    })
+                                    .copied()
+                                {
+                                    let (cost, _) = self.paid_structure_upgrade_quote(city);
+                                    if player_gold >= cost {
+                                        if let Some(player) = self.state.player_mut(bot_id) {
+                                            player.iq_points = (player.iq_points - build_cost).max(0.0);
+                                        }
+                                        decisions.push(BotDecision {
+                                            bot_id,
+                                            kind: BotDecisionKind::Build,
+                                            intent: GameplayIntent::UpgradeStructure {
+                                                building_id: city.id,
+                                            },
+                                        });
+                                        return;
+                                    }
+                                }
+                            } else if let Some((_, cost, _)) =
+                                self.foundation_quote(bot_id, BuildingKind::Tower)
+                                && player_gold >= cost
+                                && let Some(site) = find_district_site_in_owned_cities(
+                                    self,
+                                    bot_id,
+                                    BuildingKind::Tower,
+                                    Some(target),
+                                )
                             {
                                 if let Some(player) = self.state.player_mut(bot_id) {
                                     player.iq_points = (player.iq_points - build_cost).max(0.0);
@@ -107,28 +163,32 @@ impl SowEngine {
                                     bot_id,
                                     kind: BotDecisionKind::Build,
                                     intent: GameplayIntent::BuildStructure {
-                                        kind: BuildingKind::SAM,
-                                        target_tile: sam_site,
+                                        kind: BuildingKind::Tower,
+                                        target_tile: site,
                                     },
                                 });
                                 return;
                             }
                         }
                     }
-                    let nuclear_city_level = crate::building::nuclear_city_level(self.campaign_unlocks.is_some());
                     let wants_nuclear_progression = matches!(slot.tier, AiTier::Ghost | AiTier::Nation)
                         && bot_iq >= 100
                         && agg.highest_city_level >= 4
-                        && self.campaign_allows_building(BuildingKind::MissileSilo, 1)
-                        && self.campaign_allows_building(BuildingKind::City, nuclear_city_level)
-                        && self.buildings.iter().any(|building| {
-                            building.kind == BuildingKind::City
-                                && self.naval_target_allowed(bot_id, building.owner_id)
-                        });
-                    if wants_nuclear_progression && agg.highest_city_level < nuclear_city_level
+                        && self.campaign_allows_building(BuildingKind::MilitaryCamp, 5)
+                        && self.campaign_allows_building(BuildingKind::City, 5)
+                        && shared
+                            .city_owners
+                            .iter()
+                            .any(|&owner_id| self.naval_target_allowed(bot_id, owner_id));
+                    if wants_nuclear_progression
+                        && agg.highest_city_level < 5
                         && !super::structures::has_pending_build(decisions, bot_id)
                         && let Some(upgrade) = stack_build_decision(
-                            self, bot_id, BuildingKind::City, player_gold, nuclear_city_level,
+                            self,
+                            bot_id,
+                            BuildingKind::City,
+                            player_gold,
+                            5,
                         )
                     {
                         if let Some(player) = self.state.player_mut(bot_id) {
@@ -137,11 +197,24 @@ impl SowEngine {
                         decisions.push(upgrade);
                         return;
                     }
-                    if wants_nuclear_progression && agg.count_silo == 0
-                        && self.foundation_quote(bot_id, BuildingKind::MissileSilo)
-                            .is_some_and(|(_, cost, _)| player_gold >= cost + self.nuclear_price(crate::game::NukeKind::AtomBomb))
+                    if wants_nuclear_progression
+                        && agg.silo_levels == 0
+                        && agg.highest_city_level >= 5
+                        && !super::structures::has_pending_build(decisions, bot_id)
                     {
-                        return;
+                        if let Some(upgrade) = stack_build_decision(
+                            self,
+                            bot_id,
+                            BuildingKind::MilitaryCamp,
+                            player_gold,
+                            5,
+                        ) {
+                            if let Some(player) = self.state.player_mut(bot_id) {
+                                player.iq_points = (player.iq_points - build_cost).max(0.0);
+                            }
+                            decisions.push(upgrade);
+                            return;
+                        }
                     }
                     let is_campaign_faction = self.campaign_unlocks.is_some()
                         || self.campaign_contact_resolved.contains(&bot_id)
@@ -161,6 +234,7 @@ impl SowEngine {
                             player_tile_count,
                             agg,
                             slot.is_under_attack,
+                            shared,
                         ) {
                             if let Some(player) = self.state.player_mut(bot_id) {
                                 player.iq_points = (player.iq_points - build_cost).max(0.0);
@@ -174,25 +248,31 @@ impl SowEngine {
                         + agg.count_trading_post
                         + agg.count_port
                         + agg.count_military_camp
-                        + agg.count_sam;
+                        + agg.count_farm;
                     let prefers_towers_first = slot.policy().prefers_towers_first
                         && !is_campaign_faction
                         && agg.count_tower == 0;
                     let economy_priority_gap = slot.policy().prioritizes_economy_buildings
-                        && [BuildingKind::City, BuildingKind::TradingPost, BuildingKind::MilitaryCamp]
-                            .into_iter()
-                            .any(|kind| {
-                                kind.is_enabled()
-                                    && (kind != BuildingKind::TradingPost || all_structures > 0)
-                                    && agg.total_structures_of_kind(kind)
-                                        < bot_structure_target_count(kind, city_equivalent, bot_iq)
-                            });
+                        && [
+                            BuildingKind::City,
+                            BuildingKind::Farm,
+                            BuildingKind::TradingPost,
+                            BuildingKind::MilitaryCamp,
+                        ]
+                        .into_iter()
+                        .any(|kind| {
+                            kind.is_enabled()
+                                && (kind != BuildingKind::TradingPost || all_structures > 0)
+                                && agg.total_structures_of_kind(kind)
+                                    < bot_structure_target_count(kind, city_equivalent, bot_iq)
+                        });
                     let mut build_order = [
-                        BuildingKind::Tower,
                         BuildingKind::City,
+                        BuildingKind::Farm,
                         BuildingKind::TradingPost,
                         BuildingKind::Port,
                         BuildingKind::MilitaryCamp,
+                        BuildingKind::Tower,
                     ];
                     let port_target_count =
                         bot_structure_target_count(BuildingKind::Port, city_equivalent, bot_iq);
@@ -287,7 +367,7 @@ impl SowEngine {
                             + agg.count_trading_post
                             + agg.count_port
                             + agg.count_military_camp
-                            + agg.count_sam;
+                            + agg.count_farm;
                         let density = all_structures as f32 / player_tile_count.max(1) as f32;
                         let is_density_high = bot_iq >= 110 && density > 1.0 / 600.0;
                         let structure_floor = player_tile_count / 800;
@@ -341,7 +421,30 @@ impl SowEngine {
                             }
                             continue;
                         }
-                        let mut target_tile = if kind == BuildingKind::TradingPost {
+                        let mut target_tile = if !self.legacy_building_rules && kind.is_non_city() {
+                            let preferred_probe = if kind == BuildingKind::Port {
+                                let w = self.state.map.width.max(1);
+                                let cities = city_anchors_from_buildings(&self.buildings, w);
+                                cities
+                                    .into_iter()
+                                    .find(|c| {
+                                        c.owner_id == bot_id
+                                            && c.active_level >= 1
+                                            && crate::building::evaluate_city_site_traits(
+                                                &self.state.map,
+                                                c.x,
+                                                c.y,
+                                                &[],
+                                                &self.state.config,
+                                            )
+                                            .has_coastal_port_access
+                                    })
+                                    .map(|c| c.y * w + c.x)
+                            } else {
+                                None
+                            };
+                            find_district_site_in_owned_cities(self, bot_id, kind, preferred_probe)
+                        } else if kind == BuildingKind::TradingPost {
                             let anchor = self
                                 .buildings
                                 .iter()
@@ -363,7 +466,7 @@ impl SowEngine {
                         } else {
                             None
                         };
-                        if target_tile.is_none() {
+                        if target_tile.is_none() && (self.legacy_building_rules || kind == BuildingKind::City) {
                             target_tile = {
                                 let (_blocks_examined, _directory_words_examined) = {
                                     let (state, scratch) = (&mut self.state, &mut self.placement_scratch);
@@ -401,7 +504,9 @@ impl SowEngine {
                                     border: &border_candidates,
                                     interior: &interior_candidates,
                                 };
-                                let resolved = if kind == BuildingKind::MilitaryCamp && self.legacy_building_rules {
+                                let resolved = if !self.legacy_building_rules && kind == BuildingKind::City {
+                                    find_city_site_from_candidates(self, bot_id, candidates)
+                                } else if kind == BuildingKind::MilitaryCamp && self.legacy_building_rules {
                                     resolve_military_camp_from_candidates(
                                         &self.state.map,
                                         bot_id,
@@ -458,17 +563,17 @@ impl SowEngine {
                     if decisions.len() == decisions_before_building
                         && sam_defense_enabled
                         && all_owned_buildings_covered
-                        && self.campaign_allows_building(BuildingKind::SAM, 2)
+                        && self.campaign_allows_building(BuildingKind::Tower, 6)
                     {
                         if let Some(decision) = stack_build_decision(
                             self,
                             bot_id,
-                            BuildingKind::SAM,
+                            BuildingKind::Tower,
                             player_gold,
                             self.campaign_unlocks
                                 .as_ref()
-                                .map_or(BuildingKind::SAM.max_level(), |unlocks| {
-                                    unlocks.building_level(BuildingKind::SAM)
+                                .map_or(BuildingKind::Tower.max_level(), |unlocks| {
+                                    unlocks.building_level(BuildingKind::Tower)
                                 }),
                         ) {
                             if let Some(player) = self.state.player_mut(bot_id) {

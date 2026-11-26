@@ -28,9 +28,13 @@ impl TrackedProjectile {
             kind: proj.kind,
             dst_tile: proj.dst_tile,
             current_tile,
-            split_tile: proj.path.get((proj.path.len() / 2).next_multiple_of(
-                usize::from(proj.steps_per_tick.max(1))
-            )).copied().unwrap_or(proj.dst_tile),
+            split_tile: proj
+                .path
+                .get(
+                    (proj.path.len() / 2).next_multiple_of(usize::from(proj.steps_per_tick.max(1))),
+                )
+                .copied()
+                .unwrap_or(proj.dst_tile),
             owner_id: proj.owner_id,
             path_cursor: proj.path_cursor,
             steps_per_tick: proj.steps_per_tick,
@@ -357,17 +361,27 @@ pub struct InputState {
 
 impl InputState {
     pub fn project_board(&self, point: [f32; 2]) -> [f32; 2] {
-        self.tabletop.as_ref().map_or(point, |table| table.project(point))
+        self.tabletop
+            .as_ref()
+            .map_or(point, |table| table.project(point))
     }
 
     pub fn world_to_screen(&self, point: [f32; 2]) -> [f32; 2] {
         let [x, y] = self.project_board(point);
-        [self.camera_x + x * self.camera_zoom, self.camera_y + y * self.camera_zoom]
+        [
+            self.camera_x + x * self.camera_zoom,
+            self.camera_y + y * self.camera_zoom,
+        ]
     }
 
     pub fn screen_to_world(&self, [x, y]: [f32; 2]) -> [f32; 2] {
-        let point = [(x - self.camera_x) / self.camera_zoom, (y - self.camera_y) / self.camera_zoom];
-        self.tabletop.as_ref().map_or(point, |table| table.unproject(point))
+        let point = [
+            (x - self.camera_x) / self.camera_zoom,
+            (y - self.camera_y) / self.camera_zoom,
+        ];
+        self.tabletop
+            .as_ref()
+            .map_or(point, |table| table.unproject(point))
     }
 
     pub fn board_y_scale(&self) -> f32 {
@@ -747,7 +761,7 @@ pub(crate) fn structure_capture_priority(kind: sow_core::game::BuildingKind) -> 
         BuildingKind::TradingPost => 4,
         BuildingKind::SAM | BuildingKind::MissileSilo => 3,
         BuildingKind::Tower => 2,
-        BuildingKind::MilitaryCamp => 1,
+        BuildingKind::MilitaryCamp | BuildingKind::Farm => 1,
     }
 }
 
@@ -1015,7 +1029,11 @@ impl UiState {
         step: u8,
         spatial: crate::app::audio::SpatialSoundParams,
     ) {
-        if let Some(slot) = self.pending_streak_sfx.iter_mut().find(|slot| slot.is_none()) {
+        if let Some(slot) = self
+            .pending_streak_sfx
+            .iter_mut()
+            .find(|slot| slot.is_none())
+        {
             *slot = Some(PendingKillStreakSfx {
                 play_at,
                 step,
@@ -1162,7 +1180,9 @@ impl UiState {
             label.to_string(),
             Some(min_step),
             kind,
-            Some(CascadeIcon::Status(sow_render::text::NameplateStatusSprite::Death)),
+            Some(CascadeIcon::Status(
+                sow_render::text::NameplateStatusSprite::Death,
+            )),
             ring_radius,
             delay_secs,
             initial_world_rise,
@@ -1188,7 +1208,9 @@ impl UiState {
             label,
             None,
             CascadeCalloutKind::Advance,
-            Some(CascadeIcon::Status(sow_render::text::NameplateStatusSprite::ArrowUp)),
+            Some(CascadeIcon::Status(
+                sow_render::text::NameplateStatusSprite::ArrowUp,
+            )),
             0.0,
             now,
         );
@@ -1387,6 +1409,8 @@ pub struct SowApp {
     pub join_matchmaking: bool,
     /// A queued join targeting a public rotating matchmaking lobby (non-ranked).
     pub join_public_matchmaking: bool,
+    /// A join using the shared ranked FFA lobby and bot-fill pipeline.
+    pub join_ranked_ffa: bool,
     /// Coarse, consented funnel timing only; never sent to the match server.
     pub portal_join_started_at: Option<web_time::Instant>,
     pub portal_match_started_at: Option<web_time::Instant>,
@@ -1474,12 +1498,24 @@ mod cascade_tests {
         assert_eq!(tracker.record_advance(12, t0), None);
         assert_eq!(tracker.record_advance(8, t0 + Duration::from_secs(1)), None);
         // Crossing multiple thresholds in a single tick emits only the highest crossed milestone.
-        assert_eq!(tracker.record_advance(95, t0 + Duration::from_secs(2)), Some(100));
-        assert_eq!(tracker.record_advance(135, t0 + Duration::from_secs(3)), Some(250));
+        assert_eq!(
+            tracker.record_advance(95, t0 + Duration::from_secs(2)),
+            Some(100)
+        );
+        assert_eq!(
+            tracker.record_advance(135, t0 + Duration::from_secs(3)),
+            Some(250)
+        );
 
         // Idle gap resets offensive push back to 50.
-        assert_eq!(tracker.record_advance(49, t0 + Duration::from_secs(10)), None);
-        assert_eq!(tracker.record_advance(1, t0 + Duration::from_secs(11)), Some(50));
+        assert_eq!(
+            tracker.record_advance(49, t0 + Duration::from_secs(10)),
+            None
+        );
+        assert_eq!(
+            tracker.record_advance(1, t0 + Duration::from_secs(11)),
+            Some(50)
+        );
 
         tracker.reset_kills();
         assert_eq!(tracker.kill_streak, 0);

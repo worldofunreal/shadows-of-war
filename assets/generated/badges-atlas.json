@@ -21,7 +21,14 @@
     "clock",
     "shield",
     "range",
-    "speed"
+    "speed",
+    "lod-city",
+    "lod-tower",
+    "lod-trading-post",
+    "lod-port",
+    "lod-military-camp",
+    "lod-sam",
+    "lod-silo"
   ],
   "schema_version": 1
 }

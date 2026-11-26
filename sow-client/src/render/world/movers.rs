@@ -26,6 +26,56 @@ pub fn tile_to_world(tile: u32, map_w: u32) -> (f32, f32) {
 }
 
 #[inline]
+pub(crate) fn fleet_world_pos(fleet: &FleetSnapshot, map_w: u32) -> (f32, f32) {
+    let w = map_w.max(1);
+    if matches!(
+        fleet.unit_type,
+        UnitType::TransportShip | UnitType::TradeShip
+    ) && fleet.path_cursor > 0
+        && !fleet.path.is_empty()
+    {
+        let from_idx = fleet.path_cursor.saturating_sub(1).min(fleet.path.len() - 1);
+        let (from_x, from_y) = tile_to_world(fleet.path[from_idx], w);
+        let (to_x, to_y) = fleet
+            .path
+            .get(fleet.path_cursor)
+            .copied()
+            .map(|tile| tile_to_world(tile, w))
+            .unwrap_or((from_x, from_y));
+        let progress = fleet.movement_progress.clamp(0.0, 1.0);
+        (
+            from_x + (to_x - from_x) * progress,
+            from_y + (to_y - from_y) * progress,
+        )
+    } else {
+        tile_to_world(fleet.current_tile, w)
+    }
+}
+
+#[inline]
+fn fleet_sprite_for_unit(unit_type: UnitType) -> MoverSpriteId {
+    match unit_type {
+        UnitType::TransportShip => MoverSpriteId::TransportShip,
+        UnitType::TradeShip => MoverSpriteId::TradeShip,
+        UnitType::Warship => MoverSpriteId::Warship,
+    }
+}
+
+#[inline]
+fn ship_sprite_world_size(
+    base_size: f32,
+    class_scale: f32,
+    min_px: f32,
+    camera_zoom: f32,
+) -> f32 {
+    let mut size = base_size * class_scale;
+    if min_px > 0.0 && size * camera_zoom < min_px {
+        size = min_px / camera_zoom.max(0.0001);
+    }
+    size
+}
+
+#[inline]
 fn flight_progress(path_len: usize, path_index: f32) -> f32 {
     if path_len <= 1 {
         1.0
@@ -422,7 +472,9 @@ impl MoverScene {
             }
         }
         for building in &snap.buildings {
-            if building.kind != BuildingKind::SAM {
+            let is_sam = building.kind == BuildingKind::SAM
+                || (building.kind == BuildingKind::Tower && building.active_level() >= 5);
+            if !is_sam {
                 continue;
             }
             let visible = !fog_of_war_enabled
@@ -525,7 +577,8 @@ impl MoverScene {
     }
 
     fn ingest_fleet(&mut self, fleet: &FleetSnapshot, map_w: u32, my_id: u16) {
-        let (prev_x, prev_y, curr_x, curr_y, progress) = if matches!(
+        let (curr_x, curr_y) = fleet_world_pos(fleet, map_w);
+        let (prev_x, prev_y, progress) = if matches!(
             fleet.unit_type,
             UnitType::TransportShip | UnitType::TradeShip
         ) && fleet.path_cursor > 0
@@ -536,22 +589,8 @@ impl MoverScene {
                 .saturating_sub(1)
                 .min(fleet.path.len() - 1);
             let (from_x, from_y) = tile_to_world(fleet.path[from_idx], map_w);
-            let (to_x, to_y) = fleet
-                .path
-                .get(fleet.path_cursor)
-                .copied()
-                .map(|tile| tile_to_world(tile, map_w))
-                .unwrap_or((from_x, from_y));
-            let progress = fleet.movement_progress.clamp(0.0, 1.0);
-            (
-                from_x,
-                from_y,
-                from_x + (to_x - from_x) * progress,
-                from_y + (to_y - from_y) * progress,
-                progress,
-            )
+            (from_x, from_y, fleet.movement_progress.clamp(0.0, 1.0))
         } else {
-            let (curr_x, curr_y) = tile_to_world(fleet.current_tile, map_w);
             let (prev_x, prev_y) = if fleet.path_cursor > 1 && !fleet.path.is_empty() {
                 let prev_idx = fleet
                     .path_cursor
@@ -561,14 +600,10 @@ impl MoverScene {
             } else {
                 (curr_x, curr_y)
             };
-            (prev_x, prev_y, curr_x, curr_y, 0.0)
+            (prev_x, prev_y, 0.0)
         };
 
-        let sprite = match fleet.unit_type {
-            UnitType::TransportShip => MoverSpriteId::TransportShip,
-            UnitType::TradeShip => MoverSpriteId::TradeShip,
-            UnitType::Warship => MoverSpriteId::Warship,
-        };
+        let sprite = fleet_sprite_for_unit(fleet.unit_type);
 
         let rgb = self
             .player_colors
@@ -1044,7 +1079,6 @@ impl MoverScene {
                 }
                 MoverSpriteId::SamMissile => projectile_scale * sam_scale,
             };
-            let mut sprite_size = slot.size * scale * class_scale;
             let minimum_screen_size = match slot.sprite {
                 MoverSpriteId::TransportShip => min_transport_px,
                 MoverSpriteId::TradeShip => min_trade_ship_px,
@@ -1055,9 +1089,12 @@ impl MoverScene {
                 MoverSpriteId::SamMissile if slot.is_shell => min_sam_px * SHELL_SPRITE_SCALE,
                 MoverSpriteId::SamMissile => min_sam_px,
             };
-            if minimum_screen_size > 0.0 && sprite_size * params.camera_zoom < minimum_screen_size {
-                sprite_size = minimum_screen_size / params.camera_zoom;
-            }
+            let mut sprite_size = ship_sprite_world_size(
+                slot.size * scale,
+                class_scale,
+                minimum_screen_size,
+                params.camera_zoom,
+            );
             let locate_age = located_fleet
                 .filter(|(fleet_id, _)| slot.is_fleet && fleet_id == id)
                 .map(|(_, age)| age);
@@ -1299,6 +1336,224 @@ impl MoverScene {
             });
         }
         self.arc_scratch = arc_scratch;
+    }
+
+    /// Pack wave-synced dying ships into the same GPU sprite batch as live movers
+    /// (zero extra draw calls, zero CPU UI vertices, strict shard LOD/cap for low-end devices).
+    #[allow(clippy::too_many_arguments)]
+    pub fn pack_dying_ships(
+        &self,
+        dying_ships: impl Iterator<Item = crate::render::world::blasts::DyingShipRender>,
+        params: &MoverPackParams<'_>,
+        fog_of_war: bool,
+        my_player_id: u16,
+        fog_visible: &sow_core::bitset::DenseBitSet,
+        reduced_motion: bool,
+        renderer: &mut crate::render::gpu::MoverRenderer,
+    ) {
+        if !params.sprites_enabled {
+            return;
+        }
+        let setting = |id: &str, fallback: f32| {
+            sow_render::shader_params::shader_slot(id)
+                .map(|slot| params.shader_params[slot][0])
+                .unwrap_or(fallback)
+        };
+        let min_transport_px = setting("mover.transport.minimum_px", MIN_TRANSPORT_SCREEN_PX);
+        let min_trade_ship_px = setting("mover.trade_ship.minimum_px", 16.0);
+        let min_warship_px = setting("mover.warship.minimum_px", 16.0);
+        let transport_scale = setting("mover.transport.scale", 1.0);
+        let trade_ship_scale = setting("mover.trade_ship.scale", 1.0);
+        let warship_scale = setting("mover.warship.scale", 1.0);
+        let zoom = params.camera_zoom.max(0.0001);
+        let inv_zoom = 1.0 / zoom;
+        let margin = 48.0;
+
+        // Hard shard cap per frame keeps fill-rate predictable on weak mobile GPUs during MIRV strikes.
+        let mut shard_budget: i32 = 64;
+        const SHARD_SUB_UVS: [[f32; 4]; 3] = [
+            [0.05, 0.12, 0.56, 0.62],
+            [0.44, 0.08, 0.95, 0.60],
+            [0.14, 0.45, 0.86, 0.94],
+        ];
+
+        for dying in dying_ships {
+            if fog_of_war
+                && dying.owner_id != 0
+                && dying.owner_id != my_player_id
+                && !fog_visible.contains(dying.tile_idx)
+            {
+                continue;
+            }
+            let sprite = fleet_sprite_for_unit(dying.unit_type);
+            let (class_scale, min_px) = match sprite {
+                MoverSpriteId::TransportShip => (transport_scale, min_transport_px),
+                MoverSpriteId::TradeShip => (trade_ship_scale, min_trade_ship_px),
+                _ => (warship_scale, min_warship_px),
+            };
+            let base_size = ship_sprite_world_size(0.7, class_scale, min_px, zoom);
+            let screen_px = base_size * zoom;
+            let sx = params.camera_x + dying.world_x * zoom;
+            let sy = params.camera_y + dying.world_y * zoom;
+            let cull = margin + screen_px * 1.4;
+            if sx + cull < 0.0
+                || sx - cull > params.screen_w
+                || sy + cull < 0.0
+                || sy - cull > params.screen_h
+            {
+                continue;
+            }
+
+            let uv = sprite.uv_rect();
+            let [r, g, b] = dying.rgb;
+            let phase_ang = dying.seed * std::f32::consts::TAU;
+
+            match dying.phase {
+                crate::render::world::blasts::DyingBuildingPhase::PreWave(pre_t) => {
+                    let (jx, jy, rot, color) = if reduced_motion {
+                        (0.0, 0.0, 0.0, [r, g, b, 1.0])
+                    } else {
+                        let ramp = pre_t * pre_t;
+                        let amp = (1.6 * ramp * inv_zoom).min(base_size * 0.16);
+                        let jx = (pre_t * 68.0 + phase_ang).sin() * amp;
+                        let jy = (pre_t * 79.0 - phase_ang * 1.3).cos() * amp;
+                        let rot = (pre_t * 42.0 + phase_ang).sin() * 0.14 * ramp;
+                        let tint = [
+                            (r + 0.45 * ramp).min(1.6),
+                            (g + 0.12 * ramp * (1.0 - ramp * 0.5)).min(1.4),
+                            b * (1.0 - 0.35 * ramp),
+                            1.0,
+                        ];
+                        (jx, jy, rot, tint)
+                    };
+                    renderer.push_sprite(MoverInstanceGpu {
+                        world_pos: [dying.world_x + jx, dying.world_y + jy],
+                        size: base_size,
+                        rotation: rot,
+                        color,
+                        uv_rect: uv,
+                        height: 0.0,
+                    });
+                }
+                crate::render::world::blasts::DyingBuildingPhase::Collapsing(ct) => {
+                    let dir = dying.blast_dir;
+                    let tilt_sign = if dying.seed >= 0.5 { 1.0 } else { -1.0 };
+
+                    if ct < 0.22 {
+                        let u = ct / 0.22;
+                        let kick = if reduced_motion { 0.0 } else { base_size * 0.26 * u };
+                        let rot = if reduced_motion {
+                            0.0
+                        } else {
+                            tilt_sign * (0.28 + 0.55 * u)
+                        };
+                        let swell = 1.0 + 0.24 * (1.0 - u);
+                        let fade = (1.0 - u * 0.2).max(0.0);
+                        let color = if reduced_motion {
+                            [r, g, b, fade]
+                        } else {
+                            let flash = 1.0 - u;
+                            [
+                                (r * 0.4 + 1.15 * flash).min(1.5),
+                                (g * 0.35 + 0.65 * flash).min(1.3),
+                                (b * 0.25 + 0.22 * flash).min(1.0),
+                                fade,
+                            ]
+                        };
+                        renderer.push_sprite(MoverInstanceGpu {
+                            world_pos: [dying.world_x + dir[0] * kick, dying.world_y + dir[1] * kick],
+                            size: base_size * swell,
+                            rotation: rot,
+                            color,
+                            uv_rect: uv,
+                            height: 0.0,
+                        });
+                    } else {
+                        let p = ((ct - 0.22) / 0.78).clamp(0.0, 1.0);
+                        let ease = 1.0 - (1.0 - p) * (1.0 - p);
+                        let drift = if reduced_motion {
+                            0.0
+                        } else {
+                            base_size * (0.26 + 0.55 * ease)
+                        };
+                        let sink_px = -screen_px * 0.42 * ease * inv_zoom;
+                        let rot = if reduced_motion {
+                            0.0
+                        } else {
+                            tilt_sign * (0.83 + 0.68 * ease)
+                        };
+                        let scale = (1.0 - 0.52 * ease).max(0.32);
+                        let fade = (1.0 - p * p).max(0.0);
+                        let hull_color = if reduced_motion {
+                            [r * 0.55, g * 0.55, b * 0.55, fade]
+                        } else {
+                            let heat = (1.0 - p * 1.4).max(0.0);
+                            [
+                                0.18 + 0.85 * heat,
+                                0.14 + 0.42 * heat * heat,
+                                0.13 + 0.14 * heat * heat,
+                                fade * 0.92,
+                            ]
+                        };
+                        renderer.push_sprite(MoverInstanceGpu {
+                            world_pos: [
+                                dying.world_x + dir[0] * drift,
+                                dying.world_y + dir[1] * drift,
+                            ],
+                            size: base_size * scale,
+                            rotation: rot,
+                            color: hull_color,
+                            uv_rect: uv,
+                            height: sink_px,
+                        });
+
+                        // Skip tiny sub-pixel shatter debris on low-end/zoomed-out viewports.
+                        if !reduced_motion && screen_px >= 10.0 && shard_budget >= 3 {
+                            let perp = [-dir[1], dir[0]];
+                            let du = uv[2] - uv[0];
+                            let dv = uv[3] - uv[1];
+                            let du_travel = base_size * 1.05 * ease;
+                            let heat = (1.0 - p * 1.25).clamp(0.0, 1.0);
+                            let shard_fade = (1.0 - p).powf(0.85);
+                            let shard_col = [
+                                0.22 + 1.15 * heat,
+                                0.16 + 0.58 * heat * heat,
+                                0.14 + 0.20 * heat * heat,
+                                shard_fade * 0.9,
+                            ];
+                            for (i, sub) in SHARD_SUB_UVS.iter().enumerate() {
+                                let shard_uv = [
+                                    uv[0] + du * sub[0],
+                                    uv[1] + dv * sub[1],
+                                    uv[0] + du * sub[2],
+                                    uv[1] + dv * sub[3],
+                                ];
+                                let side = if (i as f32 + dying.seed * 7.0) as i32 % 2 == 0 {
+                                    1.0
+                                } else {
+                                    -1.0
+                                };
+                                let vx = dir[0] * 0.85 + perp[0] * 0.55 * side;
+                                let vy = dir[1] * 0.85 + perp[1] * 0.55 * side;
+                                let loft = base_size * (1.25 * p - 1.35 * p * p);
+                                renderer.push_sprite(MoverInstanceGpu {
+                                    world_pos: [
+                                        dying.world_x + vx * du_travel,
+                                        dying.world_y + vy * du_travel,
+                                    ],
+                                    size: base_size * 0.48 * (1.0 - 0.35 * p),
+                                    rotation: rot + side * (1.6 + 2.4 * p),
+                                    color: shard_col,
+                                    uv_rect: shard_uv,
+                                    height: loft,
+                                });
+                            }
+                            shard_budget -= 3;
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

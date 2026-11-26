@@ -28,25 +28,54 @@ impl SowEngine {
     }
 
     pub fn ready_nuclear_silo(&self, player_id: u16, target_tile: u32) -> Option<crate::building::Building> {
+        self.ready_nuclear_silo_for_kind(player_id, NukeKind::AtomBomb, target_tile)
+    }
+
+    pub fn ready_nuclear_silo_for_kind(
+        &self,
+        player_id: u16,
+        kind: NukeKind,
+        target_tile: u32,
+    ) -> Option<crate::building::Building> {
         let w = self.state.map.width;
         if w == 0 || target_tile >= w.saturating_mul(self.state.map.height) {
             return None;
         }
         let tx = target_tile % w;
         let ty = target_tile / w;
-        self
-            .buildings
+        let min_camp_level = kind.required_military_camp_level();
+        self.buildings
             .iter()
             .filter(|b| {
-                b.kind == BuildingKind::MissileSilo
-                    && b.owner_id == player_id
-                    && self.nuclear_charges(b.id, b.active_level()) > 0
+                if b.owner_id != player_id {
+                    return false;
+                }
+                let charges_capacity = match b.kind {
+                    BuildingKind::MilitaryCamp if b.active_level() >= min_camp_level => {
+                        b.active_level().saturating_sub(4)
+                    }
+                    BuildingKind::MissileSilo if self.legacy_building_rules => b.active_level(),
+                    _ => 0,
+                };
+                charges_capacity > 0 && self.nuclear_charges(b.id, charges_capacity) > 0
             })
             .min_by_key(|b| {
                 let bx = b.tile_idx % w;
                 let by = b.tile_idx / w;
                 (bx.abs_diff(tx) + by.abs_diff(ty), b.id)
-            }).copied()
+            })
+            .copied()
+    }
+
+    pub fn player_has_nuclear_capability(&self, player_id: u16, kind: NukeKind) -> bool {
+        let min_camp_level = kind.required_military_camp_level();
+        self.buildings.iter().any(|b| {
+            b.owner_id == player_id
+                && ((b.kind == BuildingKind::MilitaryCamp && b.active_level() >= min_camp_level)
+                    || (self.legacy_building_rules
+                        && b.kind == BuildingKind::MissileSilo
+                        && b.active_level() > 0))
+        })
     }
 
     pub fn launch_nuclear_weapon(&mut self, player_id: u16, kind: NukeKind, target_tile: u32) {
@@ -70,7 +99,13 @@ impl SowEngine {
         } else {
             0.0
         };
-        if !crate::building::player_has_nuclear_launch_city(&self.buildings, player_id, self.campaign_unlocks.is_some()) {
+        if self.legacy_building_rules
+            && !crate::building::player_has_nuclear_launch_city(
+                &self.buildings,
+                player_id,
+                self.campaign_unlocks.is_some(),
+            )
+        {
             self.state.events.push(crate::game::GameEvent::NuclearActionRejected {
                 player_id,
                 reason: NuclearActionFailure::CityRequirement,
@@ -78,7 +113,15 @@ impl SowEngine {
             });
             return;
         }
-        let Some(silo) = self.ready_nuclear_silo(player_id, target_tile) else {
+        if !self.player_has_nuclear_capability(player_id, kind) {
+            self.state.events.push(crate::game::GameEvent::NuclearActionRejected {
+                player_id,
+                reason: NuclearActionFailure::CityRequirement,
+                cost: reported_cost,
+            });
+            return;
+        }
+        let Some(silo) = self.ready_nuclear_silo_for_kind(player_id, kind, target_tile) else {
             self.state.events.push(crate::game::GameEvent::NuclearActionRejected {
                 player_id,
                 reason: NuclearActionFailure::NoReadySilo,

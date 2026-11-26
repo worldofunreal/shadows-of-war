@@ -45,6 +45,9 @@ pub fn troop_income_per_second(
         + cfg.military_camp_troop_income
             * agg.military_camp_troop_level_weight
             * leader.resource_bonus_multiplier(Source::District(District::MilitaryCamp), Resource::Troops)
+        + cfg.farm_troop_income
+            * agg.farm_troop_level_weight
+            * leader.resource_bonus_multiplier(Source::District(District::Farm), Resource::Troops)
         + cfg.port_troop_income
             * agg.port_income_level_weight
             * leader.resource_bonus_multiplier(Source::District(District::Port), Resource::Troops)
@@ -81,6 +84,9 @@ pub fn gold_income_per_second(
                 Source::District(District::MilitaryCamp),
                 Resource::Gold,
             )
+        + cfg.farm_gold_income
+            * agg.farm_gold_level_weight
+            * leader.resource_bonus_multiplier(Source::District(District::Farm), Resource::Gold)
         + land_trade_gold_per_second(agg, leader, cfg)
         + cfg.port_gold_income
             * agg.port_income_level_weight

@@ -5,7 +5,7 @@
 use crate::game::BuildingKind;
 use serde::{Deserialize, Serialize};
 
-pub use sow_data::MAX_MATCH_PARTICIPANTS;
+pub use sow_data::{MAX_MATCH_PARTICIPANTS, MIN_RANKED_FFA_PARTICIPANTS};
 
 /// Persisted turn recordings; changing live messages must not change this.
 /// 6: buildings use kind-specific footprints.
@@ -20,7 +20,9 @@ pub const GAMEPLAY_FORMAT_VERSION: u64 = 9;
 // 14: queued warship production (`warship_queue`, `CancelWarshipQueue`, `BuildingProductionMax`) & `PatrolWarships`.
 // 15: directional `AttackIntent::target_tile`.
 // 16: player snapshots include built/paid structure levels for shared cost quotes.
-pub const LIVE_PROTOCOL_VERSION: u64 = 16;
+// 17: city-centric districts, Farm district, Tower+SAM and MilitaryCamp+Silo merges.
+// 18: Ranked FFA join payload and lobby kind.
+pub const LIVE_PROTOCOL_VERSION: u64 = 18;
 
 /// What two builds must share to play together. The public version is left out on
 /// purpose: a server, price or menu release must not lock out store and portal clients.
@@ -300,6 +302,8 @@ pub struct JoinPayload {
     pub password: Option<String>,
     #[serde(default)]
     pub ranked_1v1: bool,
+    #[serde(default)]
+    pub ranked_ffa: bool,
 }
 
 /// Proof that a join may bind to a canonical account ID.
@@ -354,7 +358,9 @@ pub enum ServerMessage {
         match_id: u64,
         terminal_turn: u64,
     },
-    RankedSearching { elapsed_secs: u32 },
+    RankedSearching {
+        elapsed_secs: u32,
+    },
     /// Identifies this lobby owner's immutable server route. Sent at connect so
     /// clients can reconnect to the same release after a transient WS loss.
     ServerOwner {
@@ -386,6 +392,8 @@ pub enum LobbyKind {
     Custom,
     /// Private server-assigned ranked duel.
     Ranked1v1,
+    /// Server-assigned ranked free-for-all with ordinary matchmaking ghosts.
+    RankedFFA,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -458,6 +466,7 @@ mod protocol_tests {
                 host_config: None,
                 password: None,
                 ranked_1v1: false,
+                ranked_ffa: false,
             }),
             auth: AuthProof {
                 provider: String::new(),
@@ -670,7 +679,9 @@ impl PlayerSnapshot {
         &'a self,
         players: &'a [PlayerSnapshot],
     ) -> impl Iterator<Item = &'a PlayerSnapshot> + 'a {
-        players.iter().filter(move |other| self.can_trade_with(other))
+        players
+            .iter()
+            .filter(move |other| self.can_trade_with(other))
     }
 }
 

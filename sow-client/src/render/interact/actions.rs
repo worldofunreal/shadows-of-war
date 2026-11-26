@@ -369,7 +369,11 @@ impl SowApp {
     }
 
     pub(crate) fn request_public_matchmaking(&mut self) {
-        self.request_join_inner(None, false, None, None, true);
+        self.request_join_inner(None, false, None, None, true, false);
+    }
+
+    pub(crate) fn request_ranked_ffa(&mut self) {
+        self.request_join_inner(None, false, None, None, false, true);
     }
 
     pub(crate) fn request_join(
@@ -379,7 +383,7 @@ impl SowApp {
         config: Option<Box<sow_core::game_config::GameConfig>>,
         password: Option<String>,
     ) {
-        self.request_join_inner(lobby_id, is_private, config, password, false);
+        self.request_join_inner(lobby_id, is_private, config, password, false, false);
     }
 
     fn request_join_inner(
@@ -389,14 +393,21 @@ impl SowApp {
         config: Option<Box<sow_core::game_config::GameConfig>>,
         password: Option<String>,
         public_matchmaking: bool,
+        ranked_ffa: bool,
     ) {
         self.ui.app.main_menu_state.error_message = None;
         self.ui.app.main_menu_state.notice = None;
-        let matchmaking_join =
-            !public_matchmaking && lobby_id.is_none() && !is_private && config.is_none();
+        let matchmaking_join = !ranked_ffa
+            && !public_matchmaking
+            && lobby_id.is_none()
+            && !is_private
+            && config.is_none();
         self.join_matchmaking = matchmaking_join;
         self.join_public_matchmaking = public_matchmaking;
-        self.portal_match_mode = if matchmaking_join {
+        self.join_ranked_ffa = ranked_ffa;
+        self.portal_match_mode = if ranked_ffa {
+            "ranked_ffa"
+        } else if matchmaking_join {
             "ranked_1v1"
         } else if public_matchmaking {
             "matchmaking"
@@ -404,7 +415,8 @@ impl SowApp {
             "custom"
         };
         self.portal_join_started_at = Some(web_time::Instant::now());
-        self.ui.app.main_menu_state.ranked_search_active = matchmaking_join;
+        self.ui.app.main_menu_state.ranked_search_active = matchmaking_join || ranked_ffa;
+        self.ui.app.main_menu_state.ranked_ffa_search_active = ranked_ffa;
         self.ui.app.main_menu_state.ranked_search_elapsed_secs = 0;
         self.ui.app.main_menu_state.ranked_matchup = None;
         if let Some(cfg) = config {
@@ -422,14 +434,16 @@ impl SowApp {
         self.ui.app.main_menu_state.is_lobby_host = if lobby_id.is_some() {
             false
         } else {
-            !self.join_matchmaking && !self.join_public_matchmaking
+            !self.join_matchmaking && !self.join_public_matchmaking && !self.join_ranked_ffa
         };
         let identity_ready = self.progress_account_id.is_some() || self.net.is_offline;
         self.join_waiting_for_identity = !identity_ready || self.net.client.is_none();
 
         if let Some(c) = self.net.client.as_ref() {
             if identity_ready {
-                let config_opt = (!self.join_matchmaking && !self.join_public_matchmaking)
+                let config_opt = (!self.join_matchmaking
+                    && !self.join_public_matchmaking
+                    && !self.join_ranked_ffa)
                     .then(|| self.ui.app.main_menu_state.custom_game_config.clone());
                 let join_msg = self.make_join_message(lobby_id, is_private, config_opt, password);
                 if let Some(join_msg) = join_msg

@@ -2010,42 +2010,71 @@ impl SowEngine {
 
         if self.building_aggregates_dirty {
             self.bot_sam_tiles_cache = None;
-            self.refresh_building_aggregates();
+            self.refresh_building_counts_only();
         }
 
         let Some(player) = self.state.player(bot_id) else {
             return;
         };
         let gold = player.gold;
-        let home = player.home;
+        let player_home = player.home;
         let nuke_cost = self.nuclear_price(NukeKind::AtomBomb);
-        let silo_cost = self.foundation_quote(bot_id, BuildingKind::MissileSilo)
-            .map_or(f64::INFINITY, |(_, cost, _)| cost);
         self.refresh_building_grid();
-        let silos: Vec<_> = self.buildings.iter().filter(|b|
-            b.owner_id == bot_id && b.kind == BuildingKind::MissileSilo
-        ).collect();
+        let silos: Vec<_> = self
+            .buildings
+            .iter()
+            .filter(|b| {
+                b.owner_id == bot_id
+                    && ((b.kind == BuildingKind::MilitaryCamp && b.active_level() >= 5)
+                        || (self.legacy_building_rules
+                            && b.kind == BuildingKind::MissileSilo
+                            && b.active_level() > 0))
+            })
+            .collect();
         if silos.is_empty() {
-            if gold >= silo_cost + nuke_cost
-                && self.campaign_allows_building(BuildingKind::MissileSilo, 1)
-                && !super::structures::has_pending_build(decisions, bot_id)
-                && let Some((x, y)) = home
-            {
-                self.refresh_building_grid();
-                if let Some(target_tile) = crate::building::find_structure_site_near(
-                    &self.state.map, bot_id, y * self.state.map.width + x,
-                    BuildingKind::MissileSilo, &self.building_grid, &mut self.placement_scratch,
-                    self.legacy_building_rules,
-                ) {
-                    decisions.push(BotDecision {
-                        bot_id, kind: BotDecisionKind::Build,
-                        intent: GameplayIntent::BuildStructure { kind: BuildingKind::MissileSilo, target_tile },
-                    });
+            if self.legacy_building_rules {
+                let silo_cost = self
+                    .foundation_quote(bot_id, BuildingKind::MissileSilo)
+                    .map_or(f64::INFINITY, |(_, cost, _)| cost);
+                if gold >= silo_cost + nuke_cost
+                    && self.campaign_allows_building(BuildingKind::MissileSilo, 1)
+                    && !super::structures::has_pending_build(decisions, bot_id)
+                    && let Some((x, y)) = player_home
+                {
+                    if let Some(target_tile) = crate::building::find_structure_site_near(
+                        &self.state.map,
+                        bot_id,
+                        y * self.state.map.width + x,
+                        BuildingKind::MissileSilo,
+                        &self.building_grid,
+                        &mut self.placement_scratch,
+                        true,
+                    ) {
+                        decisions.push(BotDecision {
+                            bot_id,
+                            kind: BotDecisionKind::Build,
+                            intent: GameplayIntent::BuildStructure {
+                                kind: BuildingKind::MissileSilo,
+                                target_tile,
+                            },
+                        });
+                    }
                 }
             }
             return;
         }
-        let charges: usize = silos.iter().map(|b| usize::from(self.nuclear_charges(b.id,b.active_level()))).sum();
+        let silo_charges = |b: &crate::building::Building| -> u8 {
+            if b.kind == BuildingKind::MilitaryCamp {
+                b.active_level().saturating_sub(4)
+            } else {
+                b.active_level()
+            }
+        };
+        let max_camp_level = silos.iter().map(|b| b.active_level()).max().unwrap_or(0);
+        let charges: usize = silos
+            .iter()
+            .map(|b| usize::from(self.nuclear_charges(b.id, silo_charges(b))))
+            .sum();
         if charges == 0 || gold < nuke_cost {
             return;
         }
@@ -2087,28 +2116,32 @@ impl SowEngine {
             self.bot_sam_tiles_cache = Some(
                 self.buildings
                     .iter()
-                    .filter(|b| {
-                        if self.legacy_building_rules {
-                            b.kind == BuildingKind::Tower
-                                && b.active_level() >= BuildingKind::Tower.max_level()
-                                && !b.under_construction
+                    .filter_map(|b| {
+                        let lvl = b.active_level();
+                        if b.kind == BuildingKind::Tower && lvl >= 5 {
+                            let mult = self
+                                .state
+                                .player(b.owner_id)
+                                .map_or(1.0, |p| p.leader.tower_range_multiplier());
+                            let range = crate::building::tower_range_for_level(
+                                lvl,
+                                &self.state.config,
+                                mult,
+                            )
+                            .max(0) as u32;
+                            Some((b.tile_idx, b.owner_id, range, b.id, lvl.saturating_sub(4)))
+                        } else if b.kind == BuildingKind::SAM && lvl > 0 {
+                            let range = crate::execution::sam::sam_range(lvl) as u32;
+                            Some((b.tile_idx, b.owner_id, range, b.id, lvl))
                         } else {
-                            b.kind == BuildingKind::SAM && b.active_level() > 0
+                            None
                         }
-                    })
-                    .map(|b| {
-                        let range = if self.legacy_building_rules {
-                            48
-                        } else {
-                            crate::execution::sam::sam_range(b.active_level()) as u32
-                        };
-                        (b.tile_idx, b.owner_id, range, b.id, b.active_level())
                     })
                     .collect(),
             );
         }
         let shielded_cities = self.bot_sam_tiles_cache.as_ref().unwrap();
-        let silo_capacity: usize = silos.iter().map(|silo| usize::from(silo.level)).sum();
+        let silo_capacity: usize = silos.iter().map(|silo| usize::from(silo_charges(silo))).sum();
 
         // Find best structure to nuke
         let mut best_score = -1.0;
@@ -2133,7 +2166,8 @@ impl SowEngine {
                 BuildingKind::Tower => 5000.0 * (b.level as f64),
                 BuildingKind::TradingPost => 15000.0 * (b.level as f64),
                 BuildingKind::Port => 10000.0 * (b.level as f64),
-                BuildingKind::MilitaryCamp => 7000.0 * (b.level as f64),
+                BuildingKind::MilitaryCamp => 7000.0 * (b.level as f64) + if b.level >= 5 { 15000.0 } else { 0.0 },
+                BuildingKind::Farm => 9000.0 * (b.level as f64),
                 BuildingKind::SAM | BuildingKind::MissileSilo => 4500.0 * (b.level as f64),
             };
 
@@ -2151,27 +2185,39 @@ impl SowEngine {
             }).take(8).count();
             let mut kind = NukeKind::AtomBomb;
             let mut shots = covering + 1;
-            if !mirv_in_flight
+            let can_mirv = self.legacy_building_rules || max_camp_level >= NukeKind::MIRV.required_military_camp_level();
+            let can_hydro = self.legacy_building_rules || max_camp_level >= NukeKind::HydrogenBomb.required_military_camp_level();
+            if can_mirv
+                && !mirv_in_flight
                 && covering >= 2
                 && nearby >= 7
                 && gold >= mirv_price * 1.4
             {
                 kind = NukeKind::MIRV;
                 shots = 1;
-            } else if nearby >= 3 && gold >= self.nuclear_price(NukeKind::HydrogenBomb) * shots as f64 {
+            } else if can_hydro && nearby >= 3 && gold >= self.nuclear_price(NukeKind::HydrogenBomb) * shots as f64 {
                 kind = NukeKind::HydrogenBomb;
             }
             if gold < self.nuclear_price(kind) * shots as f64 {
                 continue;
             }
-            if charges < shots {
+            let min_lvl = kind.required_military_camp_level();
+            let eligible_charges: usize = silos
+                .iter()
+                .filter(|s| self.legacy_building_rules || s.active_level() >= min_lvl)
+                .map(|s| usize::from(self.nuclear_charges(s.id, silo_charges(s))))
+                .sum();
+            if eligible_charges < shots {
                 needs_more_charges |= shots > silo_capacity;
                 continue;
             }
             if shots > 1 {
                 let width = self.state.map.width;
                 let mut launchers: Vec<_> = silos.iter().filter_map(|silo| {
-                    let ready = usize::from(self.nuclear_charges(silo.id, silo.active_level()));
+                    if !self.legacy_building_rules && silo.active_level() < min_lvl {
+                        return None;
+                    }
+                    let ready = usize::from(self.nuclear_charges(silo.id, silo_charges(silo)));
                     (ready > 0).then_some((
                         (silo.tile_idx % width).abs_diff(bx) + (silo.tile_idx / width).abs_diff(by),
                         silo.id,
@@ -2228,8 +2274,19 @@ impl SowEngine {
         } else if needs_more_charges
             && !super::structures::has_pending_build(decisions, bot_id)
             && let Some(upgrade) = super::structures::stack_build_decision(
-                self, bot_id, BuildingKind::MissileSilo, gold - nuke_cost,
-                BuildingKind::MissileSilo.max_level(),
+                self,
+                bot_id,
+                if self.legacy_building_rules {
+                    BuildingKind::MissileSilo
+                } else {
+                    BuildingKind::MilitaryCamp
+                },
+                gold - nuke_cost,
+                if self.legacy_building_rules {
+                    BuildingKind::MissileSilo.max_level()
+                } else {
+                    BuildingKind::MilitaryCamp.max_level()
+                },
             )
         {
             decisions.push(upgrade);

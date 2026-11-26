@@ -668,6 +668,14 @@ impl SowApp {
                             self.ui.tutorial_active && key == &self.sim.config.map_name
                         })
                         .map(|(_, tiles)| tiles);
+                    // Visual clocks the fragment shader uses to fade conquest flashes
+                    // and the fog of war without a per-frame CPU pass over tiles.
+                    let (flash_now_tick, flash_duration_ticks) = self
+                        .gfx
+                        .map_renderer
+                        .as_ref()
+                        .map(|mr| (mr.flash_now_tick as f32, mr.flash_duration_ticks))
+                        .unwrap_or((0.0, 1.0));
                     let globals = MapGlobals {
                         camera_pos: [self.input.camera_x, self.input.camera_y],
                         zoom: self.input.camera_zoom,
@@ -698,7 +706,7 @@ impl SowApp {
                         blend_mode,
                         effect_heartbeat: if dev.vfx_heartbeat { 1.0 } else { 0.0 },
                         alliance_count,
-                        _pad3: 0.0,
+                        flash_now_tick,
                         effect_golden_hour: if dev.vfx_ambient_grade { 1.0 } else { 0.0 },
                         effect_holo_grid: if dev.vfx_holo_grid { 1.0 } else { 0.0 },
                         attack_flash_target,
@@ -712,7 +720,7 @@ impl SowApp {
                         } else {
                             0.0
                         },
-                        _pad2: 0.0,
+                        flash_duration_ticks,
                         _pad_alert_color: [0.0; 2],
                         alert_color,
                         dialog_border: if dev.vfx_dialog_border {
@@ -865,6 +873,17 @@ impl SowApp {
                                 &dev.shader_params,
                             );
                             self.ui.mover_scene.pack_gpu(&pack, mover_r);
+                            if dev.vfx_blasts && self.ui.blast_scene.has_active() {
+                                self.ui.mover_scene.pack_dying_ships(
+                                    self.ui.blast_scene.dying_ships_for_render(now),
+                                    &pack,
+                                    dev.fog_of_war,
+                                    my_id,
+                                    &self.sim.fog_visible,
+                                    reduced,
+                                    mover_r,
+                                );
+                            }
                             if let Some(aim) = &aim { aim.trajectory(mover_r); }
                             if let Some(tabletop) = self.input.tabletop.as_deref() {
                                 mover_r.project_tabletop(tabletop);

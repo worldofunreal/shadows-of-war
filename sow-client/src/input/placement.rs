@@ -11,6 +11,8 @@ pub struct PlacementQuery<'a> {
     pub terrain: &'a [u8],
     pub my_id: u16,
     pub buildings: &'a [sow_core::protocol::BuildingSnapshot],
+    pub city_id: Option<u64>,
+    pub config: &'a sow_core::game_config::GameConfig,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -289,7 +291,20 @@ fn placement_site_status(
                 query.buildings.iter().any(blocks)
             }
         },
-    )
+    )?;
+    let cities = sow_core::building::city_anchors_from_snapshots(query.buildings, query.map_w);
+    if query.kind == sow_core::game::BuildingKind::City {
+        sow_core::building::validate_city_spacing(x, y, &cities, query.config)
+    } else {
+        sow_core::building::validate_district_city_range(
+            query.my_id,
+            x,
+            y,
+            &cities,
+            query.city_id,
+            query.config,
+        )
+    }
 }
 
 pub fn resolve_build_target_tile(query: &PlacementQuery) -> Result<u32, &'static str> {

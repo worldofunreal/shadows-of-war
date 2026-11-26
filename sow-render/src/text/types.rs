@@ -148,6 +148,8 @@ pub struct BuildingMarkerInstance {
     /// Visible logical diameter in physical pixels (expanded internally for halo/AA margin).
     pub size: [f32; 2],
     pub uv_rect: [f32; 4],
+    /// Horizontal `[u0, u1]` slice inside `status_atlas` for the mid-zoom LOD icon.
+    pub icon_uv: [f32; 2],
     pub fill_color: [f32; 4],
     pub border_color: [f32; 3],
     pub shape: BuildingMarkerShape,
@@ -180,10 +182,17 @@ pub enum NameplateStatusSprite {
     Shield,
     Range,
     Speed,
+    LodCity,
+    LodTower,
+    LodTradingPost,
+    LodPort,
+    LodMilitaryCamp,
+    LodSam,
+    LodSilo,
 }
 
 impl NameplateStatusSprite {
-    pub const ALL: [Self; 20] = [
+    pub const ALL: [Self; 27] = [
         Self::Request,
         Self::Allied,
         Self::Traitor,
@@ -204,6 +213,13 @@ impl NameplateStatusSprite {
         Self::Shield,
         Self::Range,
         Self::Speed,
+        Self::LodCity,
+        Self::LodTower,
+        Self::LodTradingPost,
+        Self::LodPort,
+        Self::LodMilitaryCamp,
+        Self::LodSam,
+        Self::LodSilo,
     ];
 
     /// File name in `assets/art/icons/` and cell name in the generated strip.
@@ -229,6 +245,13 @@ impl NameplateStatusSprite {
             Self::Shield => "shield",
             Self::Range => "range",
             Self::Speed => "speed",
+            Self::LodCity => "lod-city",
+            Self::LodTower => "lod-tower",
+            Self::LodTradingPost => "lod-trading-post",
+            Self::LodPort => "lod-port",
+            Self::LodMilitaryCamp => "lod-military-camp",
+            Self::LodSam => "lod-sam",
+            Self::LodSilo => "lod-silo",
         }
     }
 

@@ -250,7 +250,14 @@ impl Aim {
                 .buildings
                 .iter()
                 .filter(|b| {
-                    b.kind == BuildingKind::SAM
+                    let sam_cap = if b.kind == BuildingKind::Tower && b.active_level() >= 5 {
+                        b.active_level().saturating_sub(4)
+                    } else if b.kind == BuildingKind::SAM && b.active_level() > 0 {
+                        b.active_level()
+                    } else {
+                        0
+                    };
+                    sam_cap > 0
                         && b.owner_id != id
                         && (!fog || sim.fog_visible.contains(b.tile_idx))
                         && !me.alliances.contains(&b.owner_id)
@@ -263,11 +270,23 @@ impl Aim {
                                 .state
                                 .player(b.owner_id)
                                 .is_some_and(|p| p.team == me.team))
-                        && engine.nuclear_charges(b.id, b.active_level()) > 0
+                        && engine.nuclear_charges(b.id, sam_cap) > 0
                 })
                 .filter_map(|b| {
                     let (bx, by) = tile_to_world(b.tile_idx, map.width);
-                    let r = sow_core::execution::sam::sam_range(b.active_level()).floor();
+                    let r = if b.kind == BuildingKind::Tower {
+                        let mult = engine
+                            .state
+                            .player(b.owner_id)
+                            .map_or(1.0, |p| p.leader.tower_range_multiplier());
+                        sow_core::building::tower_range_for_level(
+                            b.active_level(),
+                            &sim.config,
+                            mult,
+                        ) as f32
+                    } else {
+                        sow_core::execution::sam::sam_range(b.active_level()).floor()
+                    };
                     let mut enter = 0.0f32;
                     let mut leave = 1.0f32;
                     for (axis, center) in [bx, by].into_iter().enumerate() {

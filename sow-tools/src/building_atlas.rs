@@ -15,19 +15,20 @@ const GUTTER_PX: u32 = 2;
 const ART_MARGIN_PX: u32 = 2;
 const ART_ALPHA_CUTOFF: u8 = 8;
 /// Building art stems in `assets/art/buildings`.
-const BUILDING_KINDS: [(BuildingKind, &str); 7] = [
+const BUILDING_KINDS: [(BuildingKind, &str); 8] = [
     (BuildingKind::City, "city"),
     (BuildingKind::TradingPost, "trading-post"),
     (BuildingKind::Port, "port"),
     (BuildingKind::Tower, "tower"),
     (BuildingKind::MilitaryCamp, "military-camp"),
+    (BuildingKind::Farm, "farm"),
     (BuildingKind::SAM, "sam"),
     (BuildingKind::MissileSilo, "silo"),
 ];
 /// Nameplate and HUD badges, one strip in this order: `assets/art/icons/<name>.webp`.
 /// The cell order is read by sow-render (`badge_atlas::CELLS`) and the HUD (`STATUS_CELLS`).
-// ponytail: one 128px strip, 20 cells = 2560px; switch to a grid before it passes 4096px.
-pub const BADGES: [&str; 20] = [
+// ponytail: one 128px strip, 27 cells = 3456px; switch to a grid before it passes 4096px.
+pub const BADGES: [&str; 27] = [
     "request",
     "allied",
     "traitor",
@@ -48,6 +49,13 @@ pub const BADGES: [&str; 20] = [
     "shield",
     "range",
     "speed",
+    "lod-city",
+    "lod-tower",
+    "lod-trading-post",
+    "lod-port",
+    "lod-military-camp",
+    "lod-sam",
+    "lod-silo",
 ];
 /// Map movers, `assets/art/units/<name>.webp`, packed 4x2 in sow-render
 /// `MoverSpriteId` order (embedded in the game, never published).
@@ -115,6 +123,7 @@ fn building_sheet_cells(
     let split = (0..=cell / 8)
         .flat_map(|offset| [cell - offset, cell + offset])
         .find(|&y| (0..width).all(|x| !visible(x, y)))
+        .or_else(|| (stem == "tower").then_some(cell))
         .ok_or("art overlaps between the two rows near the center of the sheet")?;
     (0..u32::from(levels))
         .map(|index| {
@@ -161,7 +170,31 @@ pub fn pack(args: PackBuildingAtlasArgs) -> Result<(), Box<dyn Error + Send + Sy
                 .into_owned();
             metadata.push((name, level, filename, digest));
         };
-        if let Some(source) = building_art_source(&dir, stem) {
+        let source = building_art_source(&dir, stem);
+        let factory_source = (kind == BuildingKind::TradingPost)
+            .then(|| building_art_source(&dir, "factory"))
+            .flatten();
+        if let (Some(source), Some(factory_source)) = (source.as_ref(), factory_source.as_ref()) {
+            let split = usize::from(kind.max_level() / 2);
+            for (sheet_source, start, end, level_base) in [
+                (source, 0, split, 1),
+                (factory_source, split, usize::from(kind.max_level()), split as u8 + 1),
+            ] {
+                let bytes = fs::read(sheet_source)?;
+                let sheet = image::load_from_memory(&bytes)?.into_rgba8();
+                let frames = building_sheet_cells(&sheet, kind.max_level(), stem)
+                    .map_err(|error| format!("{}: {error}", sheet_source.display()))?;
+                let digest = sha256(&bytes);
+                for (index, frame) in frames.into_iter().enumerate().skip(start).take(end - start) {
+                    add(
+                        level_base + (index - start) as u8,
+                        frame,
+                        sheet_source,
+                        digest.clone(),
+                    );
+                }
+            }
+        } else if let Some(source) = source {
             let bytes = fs::read(&source)?;
             let sheet = image::load_from_memory(&bytes)?.into_rgba8();
             let frames = building_sheet_cells(&sheet, kind.max_level(), stem)
@@ -396,7 +429,7 @@ fn rust_registry(
             };
             if !matches!(
                 kind,
-                "City" | "Tower" | "TradingPost" | "Port" | "MilitaryCamp" | "SAM" | "MissileSilo"
+                "City" | "Tower" | "TradingPost" | "Port" | "MilitaryCamp" | "Farm" | "SAM" | "MissileSilo"
             ) {
                 return Err(format!("unknown building kind in atlas: {kind}").into());
             }

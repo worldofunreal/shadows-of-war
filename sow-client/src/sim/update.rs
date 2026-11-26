@@ -315,7 +315,7 @@ impl SowApp {
 
         let my_player_id = self.sim.my_player_id.unwrap_or(1);
         use sow_core::game::BuildingKind;
-        let mut counts = self
+        let counts = self
             .sim
             .current_snapshot
             .as_ref()

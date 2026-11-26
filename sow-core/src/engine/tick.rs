@@ -52,6 +52,7 @@ impl SowEngine {
                 }
                 if kind == crate::game::BuildingKind::Tower {
                     self.defense_grid_dirty = true;
+                    self.bot_sam_tiles_cache = None;
                 }
                 if kind == crate::game::BuildingKind::SAM {
                     self.bot_sam_tiles_cache = None;

@@ -315,7 +315,7 @@ mod tests {
         let current = crate::protocol::gameplay_build_identity();
         assert_eq!(
             current,
-            format!("turns-9/net-16/rules-{}", crate::SIMULATION_RULES_ID)
+            format!("turns-9/net-17/rules-{}", crate::SIMULATION_RULES_ID)
         );
         let mut engine = engine();
         let config = engine.state.config.clone();

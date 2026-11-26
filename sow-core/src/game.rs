@@ -38,14 +38,15 @@ pub enum BuildingKind {
     #[serde(rename = "TradingPost", alias = "Factory")]
     TradingPost,
     Port,
-    #[serde(rename = "MilitaryCamp", alias = "Farm")]
+    #[serde(rename = "MilitaryCamp")]
     MilitaryCamp,
     SAM,
     MissileSilo,
+    Farm,
 }
 
 impl BuildingKind {
-    pub const ALL: [BuildingKind; 7] = [
+    pub const ALL: [BuildingKind; 8] = [
         BuildingKind::City,
         BuildingKind::Tower,
         BuildingKind::TradingPost,
@@ -53,14 +54,23 @@ impl BuildingKind {
         BuildingKind::MilitaryCamp,
         BuildingKind::SAM,
         BuildingKind::MissileSilo,
+        BuildingKind::Farm,
     ];
-    pub const NON_CITY: [BuildingKind; 6] = [
+    pub const NON_CITY: [BuildingKind; 7] = [
         BuildingKind::Tower,
         BuildingKind::TradingPost,
         BuildingKind::Port,
         BuildingKind::MilitaryCamp,
         BuildingKind::SAM,
         BuildingKind::MissileSilo,
+        BuildingKind::Farm,
+    ];
+    pub const ACTIVE_DISTRICTS: [BuildingKind; 5] = [
+        BuildingKind::Farm,
+        BuildingKind::TradingPost,
+        BuildingKind::Port,
+        BuildingKind::Tower,
+        BuildingKind::MilitaryCamp,
     ];
     #[inline]
     pub const fn is_non_city(self) -> bool {
@@ -70,11 +80,7 @@ impl BuildingKind {
     pub const fn grants_building_troop_capacity(self) -> bool {
         matches!(
             self,
-            BuildingKind::Tower
-                | BuildingKind::TradingPost
-                | BuildingKind::Port
-                | BuildingKind::MilitaryCamp
-                | BuildingKind::SAM
+            BuildingKind::Farm | BuildingKind::Port | BuildingKind::MilitaryCamp
         )
     }
     #[inline]
@@ -87,13 +93,16 @@ impl BuildingKind {
             BuildingKind::MilitaryCamp => "MilitaryCamp",
             BuildingKind::SAM => "SAM",
             BuildingKind::MissileSilo => "MissileSilo",
+            BuildingKind::Farm => "Farm",
         }
     }
 
     /// Whether this structure can currently be built, upgraded, or placed in matches.
+    /// Legacy `SAM` and `MissileSilo` remain disabled: their capabilities now unlock
+    /// at level 5+ on `Tower` and `MilitaryCamp`.
     #[inline]
     pub const fn is_enabled(self) -> bool {
-        !matches!(self, Self::MilitaryCamp)
+        !matches!(self, Self::SAM | Self::MissileSilo)
     }
 
     pub const fn max_level(self) -> u8 {
@@ -103,16 +112,12 @@ impl BuildingKind {
         }
     }
 
-    /// New structures start at level one. SAM batteries and missile silos remain locked
-    /// until the player owns an Industrial City (level six).
-    pub fn foundation_level(self, city_level: u8) -> u8 {
+    /// New enabled structures start at level one.
+    pub fn foundation_level(self, _city_level: u8) -> u8 {
         if !self.is_enabled() {
             return 0;
         }
-        match self {
-            Self::SAM | Self::MissileSilo if city_level < 6 => 0,
-            _ => 1,
-        }
+        1
     }
 
     pub fn construction_duration_ticks(self) -> u32 {
@@ -121,7 +126,8 @@ impl BuildingKind {
             BuildingKind::Tower => 50,
             BuildingKind::TradingPost => 35,
             BuildingKind::Port => 30,
-            BuildingKind::MilitaryCamp => 25,
+            BuildingKind::MilitaryCamp => 30,
+            BuildingKind::Farm => 25,
             BuildingKind::SAM => 90,
             BuildingKind::MissileSilo => 100,
         }
@@ -147,6 +153,14 @@ pub enum NukeKind {
 }
 
 impl NukeKind {
+    pub const fn required_military_camp_level(self) -> u8 {
+        match self {
+            Self::AtomBomb => 5,
+            Self::HydrogenBomb => 6,
+            Self::MIRV => 7,
+        }
+    }
+
     pub fn gold_cost(self, previous_mirvs: u32) -> f64 {
         match self {
             Self::AtomBomb => 500.0,
@@ -492,6 +506,14 @@ pub enum GameEvent {
         player_id: u16,
         reason: NuclearActionFailure,
         cost: f64,
+    },
+    FleetNuked {
+        fleet_id: u64,
+        owner_id: u16,
+        target_owner: u16,
+        unit_type: UnitType,
+        tile: u32,
+        troops_lost: f64,
     },
 }
 

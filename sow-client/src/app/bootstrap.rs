@@ -382,6 +382,7 @@ impl SowApp {
             join_waiting_for_identity: false,
             join_matchmaking: false,
             join_public_matchmaking: false,
+            join_ranked_ffa: false,
             portal_join_started_at: None,
             portal_match_started_at: None,
             portal_match_mode: "other",
